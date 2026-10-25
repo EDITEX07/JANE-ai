@@ -964,17 +964,12 @@ if st.button(f"✦ {st.session_state.assistant_style} ▾", key="open_assistant_
     assistant_style_dialog()
 image_mode = st.selectbox(
     "J.A.N.E. mode",
-    ["Chat", "Coding", "Generate image"],
+    ["Chat", "Generate image"],
     key="jane_output_mode",
-    help="Choose Coding for writing, debugging, explaining, and improving code; Generate image to create an actual image.",
+    help="Choose Generate image to create an actual image from your description.",
     label_visibility="collapsed",
 )
-submitted_prompt = st.chat_input(
-    "Describe an image…" if image_mode == "Generate image"
-    else "Describe the code or bug you want help with…" if image_mode == "Coding"
-    else "Message J.A.N.E....",
-    key="jane_chat_input",
-)
+submitted_prompt = st.chat_input("Describe an image…" if image_mode == "Generate image" else "Message J.A.N.E....", key="jane_chat_input")
 prompt = submitted_prompt.strip() if submitted_prompt else None
 if st.session_state.pending_prompt:
     prompt = st.session_state.pending_prompt; st.session_state.pending_prompt = None
@@ -1047,17 +1042,6 @@ if prompt:
                     "If explicitly asked which underlying model or provider powers the current response, answer honestly "
                     "that the app may use configured AI services; distinguish the model provider from J.A.N.E.'s project creator."
                 )
-                coding_mode_instruction = (
-                    "CODING MODE: Act as a careful senior software engineering assistant. Help design, write, debug, explain, test, refactor, and document code in the language or framework the user requests. "
-                    "For bug fixes, identify the likely root cause from the supplied code and traceback, then provide a complete corrected file when the user asks for a full-file replacement; otherwise provide a small, clearly located patch. "
-                    "Preserve existing features and APIs unless the user explicitly asks to change them. Do not invent functions, package APIs, test results, or file contents. "
-                    "For code deliverables, use fenced code blocks with the correct language, include required imports and configuration, and explain where each file belongs. "
-                    "For multi-file projects, list the file tree and provide each necessary file separately. Include a requirements/dependency update only when needed. "
-                    "When possible, add focused tests and edge-case checks. Never claim code was executed, syntax-checked, deployed, or tested unless a real tool actually performed that check. "
-                    "Treat API keys, passwords, and tokens as secrets: use environment variables or Streamlit Secrets and never hard-code credentials. "
-                    "Do not run arbitrary user code on the web server or claim that generated code is safe merely because it looks correct. "
-                    if image_mode == "Coding" else ""
-                )
                 system_instruction = (
                     "You are J.A.N.E. (Judicial Analytical and Neuroresearch Engine), a warm, composed, intelligent, naturally conversational assistant with understated wit. "
                     "Sound like a person having a conversation, not a critic, therapist, interviewer, teacher, or essay writer. "
@@ -1076,7 +1060,6 @@ if prompt:
                     "If inputs are insufficient, ask for missing values. Show formulas and sanity-check results; never claim deterministic verification unless it was actually run. "
                     "For financial arithmetic, use the app's deterministic calculator when applicable rather than mental arithmetic; explain the method and rounding. "
                     + creator_identity + " "
-                    + coding_mode_instruction + " "
                     + f"Active intelligence mode: {mode}. Mode instructions: {mode_instructions[mode]} "
                     + ("ASSISTANT STYLE: Jarvis. Address the user as Sir when natural. Be disciplined, composed, concise, proactive, and mission-oriented; use polished formal language and brief status-style phrasing when useful. Do not overdo military jargon, bark orders, or sacrifice warmth, accuracy, or safety. Never claim systems/actions are running unless actually true."
                        if st.session_state.assistant_style == "Jarvis"
@@ -1142,4 +1125,20 @@ if prompt:
                         )
                     else:
                         mode_instructions = {
-                            "General": "Use natural, direct conversation. Keep simple answers short and avoid unnec
+                            "General": "Use natural, direct conversation. Keep simple answers short and avoid unnecessary headings or analysis.",
+                            "Adaptive": "Silently infer what the user needs and adapt naturally. Never announce or label the task type, response style, or internal approach. Prefer natural prose; use steps or structure only when genuinely useful. Ask questions only when essential.",
+                            "Thinker": "For complex tasks, check assumptions, alternatives, trade-offs, edge cases, failure points, and calculations. Give a clear conclusion with useful rationale, without revealing private chain-of-thought. Stay concise for simple chat.",
+                        }
+                        creator_age = 13 + (datetime.now().year - 2026)
+                        creator_identity = (
+                            "Identity rules: You are J.A.N.E. (Judicial Analytical and Neuroresearch Engine), "
+                            "the user's assistant project. If asked who created J.A.N.E., identify its project creator "
+                            "as Vihaan Shirale (EDITEX07), with Tanish Khandare as development partner. "
+                            "Do not say J.A.N.E. was created by ChatGPT or by Gemini. Do not invent ages or biographical details. "
+                            "If explicitly asked which underlying model or provider powers the current response, answer honestly "
+                            "that the app may use configured AI services; distinguish the model provider from J.A.N.E.'s project creator."
+                        )
+                        system_instruction = (
+                            "You are J.A.N.E. (Judicial Analytical and Neuroresearch Engine), "
+                            "a warm, composed, intelligent, naturally conversational assistant with understated wit. "
+                         
