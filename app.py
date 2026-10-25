@@ -7,7 +7,6 @@ import urllib.error
 import urllib.parse
 from pathlib import Path
 from datetime import datetime
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, getcontext
 
 import pandas as pd
 import streamlit as st
@@ -17,99 +16,6 @@ from google.genai import types
 from openai import OpenAI
 
 st.set_page_config(page_title="J.A.N.E. | AI Workspace", page_icon="🔴", layout="wide", initial_sidebar_state="collapsed")
-
-# -------------------- FINANCIAL PRECISION ENGINE --------------------
-# Decimal-based deterministic calculations. Monetary outputs are rounded to paise;
-# intermediate values retain high precision. These tools do not replace professional advice.
-getcontext().prec = 40
-PAISE = Decimal("0.01")
-
-def money(value):
-    return Decimal(str(value)).quantize(PAISE, rounding=ROUND_HALF_UP)
-
-def calculate_reducing_emi(principal, annual_rate_percent, months):
-    principal = Decimal(str(principal))
-    annual_rate_percent = Decimal(str(annual_rate_percent))
-    months = int(months)
-    if principal <= 0 or annual_rate_percent < 0 or months <= 0:
-        raise ValueError("Principal and months must be positive; rate cannot be negative.")
-    monthly_rate = annual_rate_percent / Decimal("1200")
-    if monthly_rate == 0:
-        exact_emi = principal / Decimal(months)
-    else:
-        growth = (Decimal(1) + monthly_rate) ** months
-        exact_emi = principal * monthly_rate * growth / (growth - Decimal(1))
-    emi = money(exact_emi)
-    # Independently amortize with paise-rounded scheduled payments.
-    balance = principal
-    total_interest = Decimal(0)
-    total_paid = Decimal(0)
-    for month in range(1, months + 1):
-        interest = money(balance * monthly_rate)
-        if month < months:
-            payment = emi
-            principal_paid = payment - interest
-            balance = money(balance - principal_paid)
-        else:
-            # Settle the remaining principal exactly on the final scheduled payment.
-            payment = money(balance + interest)
-            principal_paid = balance
-            balance = Decimal("0.00")
-        total_interest += interest
-        total_paid += payment
-    return {
-        "emi": emi, "total_paid": money(total_paid),
-        "total_interest": money(total_interest), "ending_balance": money(balance),
-        "monthly_rate_percent": monthly_rate * Decimal(100),
-        "months": months, "principal": money(principal),
-        "annual_rate_percent": annual_rate_percent,
-    }
-
-def calculate_flat_loan(principal, annual_rate_percent, months):
-    principal = Decimal(str(principal))
-    annual_rate_percent = Decimal(str(annual_rate_percent))
-    months = int(months)
-    if principal <= 0 or annual_rate_percent < 0 or months <= 0:
-        raise ValueError("Principal and months must be positive; rate cannot be negative.")
-    years = Decimal(months) / Decimal(12)
-    interest = principal * annual_rate_percent / Decimal(100) * years
-    total = principal + interest
-    return {"emi": money(total / Decimal(months)), "total_paid": money(total),
-            "total_interest": money(interest), "months": months,
-            "principal": money(principal), "annual_rate_percent": annual_rate_percent}
-
-def fmt_inr(value):
-    return f"₹{money(value):,.2f}"
-
-def render_financial_precision_tool():
-    with st.expander("🧮 Financial Precision Calculator (verified arithmetic)", expanded=False):
-        st.caption("Calculations use Decimal arithmetic. Choose the interest method stated by your lender; fees, insurance and taxes are not included.")
-        calc_type = st.radio("Calculation", ["Reducing-balance EMI", "Flat/simple-interest loan"], horizontal=True, key="fp_calc_type")
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            principal = st.number_input("Loan principal (₹)", min_value=0.01, value=100000.0, step=1000.0, format="%.2f", key="fp_principal")
-        with c2:
-            annual_rate = st.number_input("Annual interest rate (%)", min_value=0.0, value=12.0, step=0.25, format="%.4f", key="fp_rate")
-        with c3:
-            months = st.number_input("Tenure (months)", min_value=1, max_value=600, value=36, step=1, key="fp_months")
-        if st.button("Calculate and verify", key="fp_calculate", type="primary"):
-            try:
-                result = (calculate_reducing_emi(Decimal(str(principal)), Decimal(str(annual_rate)), int(months))
-                          if calc_type == "Reducing-balance EMI"
-                          else calculate_flat_loan(Decimal(str(principal)), Decimal(str(annual_rate)), int(months)))
-                a, b, c = st.columns(3)
-                a.metric("Monthly payment", fmt_inr(result["emi"]))
-                b.metric("Total interest", fmt_inr(result["total_interest"]))
-                c.metric("Total paid", fmt_inr(result["total_paid"]))
-                st.write(f"**Principal:** {fmt_inr(result['principal'])}")
-                st.write(f"**Formula method:** {calc_type}; annual rate {Decimal(str(annual_rate))}% over {int(months)} months.")
-                st.write(f"**Arithmetic check:** principal + interest = {fmt_inr(Decimal(str(result['principal'])) + Decimal(str(result['total_interest'])))} (minor paise differences may occur in the reducing-balance schedule because each monthly payment is rounded).")
-                if calc_type == "Reducing-balance EMI":
-                    st.write(f"**Final balance after scheduled payments:** {fmt_inr(result['ending_balance'])}")
-                st.caption("Estimate only: actual lender schedules may differ due to payment dates, daily interest, fees, insurance, taxes, and lender-specific rounding. Confirm against the written loan offer.")
-            except (ValueError, InvalidOperation, ArithmeticError) as exc:
-                st.error(f"Could not calculate these inputs: {exc}")
-
 
 # -------------------- SESSION STATE --------------------
 if "chats" not in st.session_state:
@@ -909,13 +815,12 @@ with st.sidebar:
         active_chat()["messages"] = []; active_chat()["title"] = "New conversation"; st.rerun()
 
 # -------------------- MAIN WORKSPACE --------------------
-render_financial_precision_tool()
 logo_path = Path(__file__).with_name("jane_logo_transparent_full.png")
 if logo_path.exists():
     logo_data = base64.b64encode(logo_path.read_bytes()).decode("ascii")
-    st.markdown('<div class="jane-logo-wrap"><img class="jane-logo" src="data:image/png;base64,' + logo_data + '" alt="J.A.N.E. logo"></div><div class="jane-subtitle">Judicial · Analytical · Neuroresearch Engine</div>', unsafe_allow_html=True)
+    st.markdown('<div class="jane-logo-wrap"><img class="jane-logo" src="data:image/png;base64,' + logo_data + '" alt="J.A.N.E. logo"></div><div class="jane-subtitle">Judicious · Analytical · Neuroresearch Engine</div>', unsafe_allow_html=True)
 else:
-    st.markdown('<div class="jane-title">J.A.N.E.</div><div class="jane-subtitle">Judicial · Analytical · Neuroresearch Engine</div>', unsafe_allow_html=True)
+    st.markdown('<div class="jane-title">J.A.N.E.</div><div class="jane-subtitle">Judicious · Analytical · Neuroresearch Engine</div>', unsafe_allow_html=True)
 st.markdown('<div class="core-wrap" aria-label="Animated J.A.N.E. energy core"><div class="energy-core"><div class="core-dot"></div></div></div>', unsafe_allow_html=True)
 
 chat = active_chat()
@@ -968,6 +873,13 @@ image_mode = st.selectbox(
     key="jane_output_mode",
     help="Choose Generate image to create an actual image from your description.",
     label_visibility="collapsed",
+)
+# Limited beta: OpenAI-hosted web search is opt-in and does not affect normal chat.
+st.toggle(
+    "Web search (Beta)",
+    key="openai_web_search_beta",
+    value=False,
+    help="When enabled, J.A.N.E. can use OpenAI web search and include clickable source links. This may use additional API credits.",
 )
 submitted_prompt = st.chat_input("Describe an image…" if image_mode == "Generate image" else "Message J.A.N.E....", key="jane_chat_input")
 prompt = submitted_prompt.strip() if submitted_prompt else None
@@ -1030,8 +942,8 @@ if prompt:
             else:
                 mode_instructions = {
                     "General": "Use natural, direct conversation. Keep simple answers short, avoid unnecessary headings and analysis, and expand only when asked or genuinely needed.",
-                    "Adaptive": "Use the full conversation context to infer what the user means, including short follow-ups, pronouns, references such as 'that' or 'it', and references to tools or ideas mentioned earlier. Do not ask the user to restate details already present in this chat. Give brief answers to simple questions and deeper, structured answers when the topic is complex or the user is exploring a serious decision. Keep answers relevant to the current topic and ask for clarification only when multiple interpretations remain genuinely plausible.",
-                    "Thinker": "Use the relevant conversation history, not only the latest message. Resolve follow-up questions from the established topic before asking for clarification. For complex or research questions, provide a formal, thorough answer with dates, named researchers, evidence, sources/citations when available, competing explanations, limitations, and uncertainty. Never invent studies, dates, researchers, or citations. Explain conclusions and key reasoning, but never reveal private chain-of-thought. Keep simple answers appropriately short.",
+                    "Adaptive": "Act as a genuinely adaptive reasoning assistant, closer to Thinker than a basic chat model when the question deserves it. Silently judge the depth required: for simple chat, be natural and brief; for complex, scientific, mathematical, historical, strategic, or ambiguous questions, give a substantial answer with clear reasoning summaries, context, assumptions, examples, alternatives, limitations, and practical implications. For factual or research questions, use web search when available and relevant, distinguish established evidence from hypotheses, and include dates, named researchers, institutions, and clickable sources when supported. Never invent citations or dates. Do not expose private chain-of-thought; provide a useful explanation of conclusions instead. Ask a clarifying question only when essential.",
+                    "Thinker": "Use a rigorous, research-oriented, formal style, especially when the assistant style is Jarvis. Give deep, well-organized answers for difficult questions: define the problem; establish context and relevant dates; explain the key concepts and competing explanations; identify named researchers, authors, institutions, and important studies where reliably known; compare evidence and methodology; discuss counterarguments, limitations, uncertainty, and open questions; and finish with a reasoned conclusion. Use web search for current or research-heavy claims when available, and provide source citations/links. Distinguish consensus, strong evidence, preliminary findings, and speculation. Never fabricate researchers, studies, quotations, statistics, dates, or sources. For unsolved problems, clearly state what is unknown rather than guessing. Keep simple questions appropriately brief. Never reveal private chain-of-thought; provide a concise rationale instead.",
                 }
                 creator_age = 13 + (datetime.now().year - 2026)
                 creator_identity = (
@@ -1042,32 +954,10 @@ if prompt:
                     "If explicitly asked which underlying model or provider powers the current response, answer honestly "
                     "that the app may use configured AI services; distinguish the model provider from J.A.N.E.'s project creator."
                 )
-                system_instruction = (
-                    "You are J.A.N.E. (Judicial Analytical and Neuroresearch Engine), a warm, composed, intelligent, naturally conversational assistant with understated wit. "
-                    "Sound like a person having a conversation, not a critic, therapist, interviewer, teacher, or essay writer. "
-                    "IMPORTANT CONVERSATION STYLE: Never announce or label the task type, response style, tone, or internal approach. Apply style guidance silently. "
-                    "Do not analyze, interpret, grade, or comment on the user's wording, greeting, personality, intelligence, emotions, or intentions unless explicitly asked. "
-                    "Never turn a simple message like Hey, Hi, Okay, or Thanks into an explanation; respond naturally and briefly. Keep casual replies to one short sentence by default. "
-                    "Avoid patronizing praise, unsolicited life lessons, overdramatic observations, and phrases that make the user feel examined or judged. Match the user's tone without forced slang. "
-                    "For substantive questions, start with the direct answer, then use clear Markdown headings, bullet points, or numbered steps when helpful. "
-                    "Give enough detail to answer fully, including important examples, assumptions, caveats, and practical next steps; do not make substantive answers too short. "
-                    "Answer every part of multi-part requests. Keep greetings and simple confirmations brief. Be respectful and honest about uncertainty. "
-                    "Do not claim to be Patrick Jane or imitate any actor's exact voice. Never claim to have verified information or performed actions you have not completed. "
-                    "Uploaded files are not automatically included in this request. SPEED: Give the shortest complete answer that satisfies the request. "
-                    "For greetings, confirmations, and simple factual questions, answer in 1-3 sentences. Do not browse or add sources unless the user asks for current information, research, verification, or web search. "
-                    "FINANCIAL ACCURACY: For money, interest, EMI, percentages, taxes, budgets, or totals, never guess arithmetic or invent missing inputs. "
-                    "State assumptions, distinguish flat from reducing-balance interest and annual from monthly rates, and distinguish exact values from rounded currency. "
-                    "If inputs are insufficient, ask for missing values. Show formulas and sanity-check results; never claim deterministic verification unless it was actually run. "
-                    "For financial arithmetic, use the app's deterministic calculator when applicable rather than mental arithmetic; explain the method and rounding. "
-                    + creator_identity + " "
-                    + f"Active intelligence mode: {mode}. Mode instructions: {mode_instructions[mode]} "
-                    + ("ASSISTANT STYLE: Jarvis. Address the user as Sir when natural. Be disciplined, composed, concise, proactive, and mission-oriented; use polished formal language and brief status-style phrasing when useful. Do not overdo military jargon, bark orders, or sacrifice warmth, accuracy, or safety. Never claim systems/actions are running unless actually true."
-                       if st.session_state.assistant_style == "Jarvis"
-                       else "ASSISTANT STYLE: Classic. Use natural, friendly, conversational language.")
-                )
-                conversation = [system_instruction, "CONVERSATION CONTINUITY RULE: Treat the following messages as one ongoing conversation. Interpret the newest user message in light of relevant earlier messages. Short follow-ups like “should I use it?”, “what about Emergent?”, “is that suitable?”, and “what are the disadvantages?” refer to the most relevant previously discussed topic unless the user clearly changes subjects. Reuse known details; do not ask the user to specify something already stated. If a reference is genuinely ambiguous, ask one concise clarifying question. Be humble, never cocky or dismissive.", "Conversation so far:"]
-                # Send a wider recent window so related follow-up questions retain their context; full history remains saved in session/Firestore.
-                for item in chat["messages"][-30:]:
+                system_instruction = ("You are J.A.N.E. (Judicious, Analytical, and Neuroresearch Engine), a warm, composed, intelligent, naturally conversational assistant with understated wit. Sound like a person having a conversation, not a critic, therapist, interviewer, teacher, or essay writer. IMPORTANT CONVERSATION STYLE: Never announce or label the task type, response style, tone, or internal approach (for example, do not write labels such as “Task type,” “Conversational response style,” or “Natural, brief and composed”). Apply style guidance silently. Do not analyze, interpret, grade, or comment on the user's wording, greeting, personality, intelligence, emotions, or intentions unless they explicitly ask you to. Never turn a simple message like 'Hey', 'Hi', 'Okay', or 'Thanks' into an explanation of what that message means; respond naturally and briefly, e.g. 'Hey! What's up?' or 'Anytime.' Keep casual replies to one short sentence by default. Avoid patronizing praise, unsolicited life lessons, overdramatic observations, and phrases that make the user feel examined or judged. Match the user's tone without forced slang. For real questions, answer directly; provide deeper analysis, structured detail, or critique only when requested or genuinely useful. Be respectful, supportive without being condescending, and honest about uncertainty. Do not claim to be Patrick Jane or imitate any actor's exact voice. Never claim to have verified information or performed actions you have not completed. Uploaded files are not automatically included in this request. SPEED: Give the shortest complete answer that satisfies the request. For greetings, confirmations, and simple factual questions, answer in 1-3 sentences. Do not browse or add sources unless the user asks for current information, research, verification, or web search. Do not repeat the conversation or explain your process. " + creator_identity + " " + f"Active intelligence mode: {mode}. Mode instructions: {mode_instructions[mode]} " + ("ASSISTANT STYLE: Jarvis. Address the user as Sir when natural. Be disciplined, composed, concise, proactive, and mission-oriented; use polished formal language and brief status-style phrasing when useful. Do not overdo military jargon, bark orders, or sacrifice warmth, accuracy, or safety. Never claim systems/actions are running unless actually true." if st.session_state.assistant_style == "Jarvis" else "ASSISTANT STYLE: Classic. Use natural, friendly, conversational language."))
+                conversation = [system_instruction, "Conversation so far:"]
+                # Send only recent context to the model for faster replies; full chat remains saved in session/Firestore.
+                for item in chat["messages"][-12:]:
                     speaker = "User" if item["role"] == "user" else "J.A.N.E."
                     conversation.append(f"{speaker}: {item['content']}")
                 conversation.append("J.A.N.E.:")
@@ -1079,26 +969,61 @@ if prompt:
                     tools=[types.Tool(google_search=types.GoogleSearch())] if needs_web_search else None,
                 )
                 with st.spinner("J.A.N.E. is thinking..."):
-                    result = client.models.generate_content(
-                        model="gemini-3.5-flash-lite",
-                        contents="\n\n".join(conversation),
-                        config=request_config,
-                    )
-                answer = result.text or "I didn't receive a text response. Please try again."
-                # Append source links when Gemini returns Google Search grounding metadata.
-                grounding = getattr(result, "grounding_metadata", None)
-                grounding_chunks = getattr(grounding, "grounding_chunks", None) if grounding else None
-                source_lines = []
-                seen_source_urls = set()
-                for chunk in grounding_chunks or []:
-                    web_source = getattr(chunk, "web", None)
-                    source_url = getattr(web_source, "uri", None) if web_source else None
-                    source_title = getattr(web_source, "title", None) if web_source else None
-                    if source_url and source_url not in seen_source_urls:
-                        seen_source_urls.add(source_url)
-                        source_lines.append(f"- [{source_title or source_url}]({source_url})")
-                if source_lines:
-                    answer += "\n\n**Sources**\n" + "\n".join(source_lines)
+                    if st.session_state.get("openai_web_search_beta"):
+                        # Beta search path: OpenAI Responses API + hosted web_search.
+                        openai_key = str(st.secrets.get("OPENAI_API_KEY", "")).strip()
+                        if not openai_key:
+                            raise RuntimeError("OpenAI web search is not configured.")
+                        openai_client = OpenAI(api_key=openai_key)
+                        web_input = "\n\n".join(conversation)
+                        response = openai_client.responses.create(
+                            model=str(st.secrets.get("OPENAI_WEB_SEARCH_MODEL", "gpt-5.5")).strip(),
+                            tools=[{"type": "web_search", "search_context_size": "low"}],
+                            tool_choice="auto",
+                            instructions=system_instruction + " Use web search for relevant current or factual claims. Cite sources clearly. Keep the answer natural and concise unless detail is needed.",
+                            input=web_input,
+                        )
+                        answer = response.output_text or "I couldn't get a web-search response. Please try again."
+                        # Responses API citations are exposed as URL annotations; render them as clickable links.
+                        source_lines = []
+                        seen_source_urls = set()
+                        for output_item in (getattr(response, "output", None) or []):
+                            for content_item in (getattr(output_item, "content", None) or []):
+                                for annotation in (getattr(content_item, "annotations", None) or []):
+                                    if isinstance(annotation, dict):
+                                        ann_type = annotation.get("type")
+                                        source_url = annotation.get("url")
+                                        source_title = annotation.get("title")
+                                    else:
+                                        ann_type = getattr(annotation, "type", None)
+                                        source_url = getattr(annotation, "url", None)
+                                        source_title = getattr(annotation, "title", None)
+                                    if ann_type == "url_citation" and source_url and source_url not in seen_source_urls:
+                                        seen_source_urls.add(source_url)
+                                        source_lines.append(f"- [{source_title or source_url}]({source_url})")
+                        if source_lines:
+                            answer += "\n\n**Sources**\n" + "\n".join(source_lines)
+                    else:
+                        result = client.models.generate_content(
+                            model="gemini-3.5-flash-lite",
+                            contents="\n\n".join(conversation),
+                            config=request_config,
+                        )
+                        answer = result.text or "I didn't receive a text response. Please try again."
+                        # Append source links when Gemini returns Google Search grounding metadata.
+                        grounding = getattr(result, "grounding_metadata", None)
+                        grounding_chunks = getattr(grounding, "grounding_chunks", None) if grounding else None
+                        source_lines = []
+                        seen_source_urls = set()
+                        for chunk in grounding_chunks or []:
+                            web_source = getattr(chunk, "web", None)
+                            source_url = getattr(web_source, "uri", None) if web_source else None
+                            source_title = getattr(web_source, "title", None) if web_source else None
+                            if source_url and source_url not in seen_source_urls:
+                                seen_source_urls.add(source_url)
+                                source_lines.append(f"- [{source_title or source_url}]({source_url})")
+                        if source_lines:
+                            answer += "\n\n**Sources**\n" + "\n".join(source_lines)
         except Exception as error:
             error_text = str(error).lower()
             status_code = getattr(error, "status_code", None) or getattr(error, "code", None)
@@ -1139,6 +1064,31 @@ if prompt:
                             "that the app may use configured AI services; distinguish the model provider from J.A.N.E.'s project creator."
                         )
                         system_instruction = (
-                            "You are J.A.N.E. (Judicial Analytical and Neuroresearch Engine), "
+                            "You are J.A.N.E. (Judicious, Analytical, and Neuroresearch Engine), "
                             "a warm, composed, intelligent, naturally conversational assistant with understated wit. "
-                         
+                            "Sound like a person having a conversation, not a critic, therapist, interviewer, teacher, or essay writer. "
+                            "Do not analyze, interpret, grade, or comment on the user's wording, greetings, personality, intelligence, emotions, or intentions unless explicitly asked. "
+                            "Never turn simple messages like 'Hey', 'Hi', 'Okay', or 'Thanks' into explanations; respond naturally and briefly, such as 'Hey! What's up?' or 'Anytime.' "
+                            "Keep casual replies to one short sentence by default. Avoid patronizing praise, unsolicited life lessons, overdramatic observations, and anything that makes the user feel examined or judged. "
+                            "Match the user's tone without forced slang. Answer real questions directly and give deeper analysis only when requested or genuinely useful. "
+                            "Be respectful, supportive without condescension, accurate, and honest. Never claim to have performed actions you have not completed. SPEED: Prefer the shortest complete useful answer. Simple chat should be 1-3 sentences. Do not browse or add sources unless the user asks for current information, research, verification, or web search. Do not repeat the conversation or explain your process. "
+                            + creator_identity + " "
+                            + f"Active intelligence mode: {mode}. {mode_instructions.get(mode, mode_instructions['Adaptive'])} " + ("ASSISTANT STYLE: Jarvis. Address the user as Sir when natural. Be disciplined, composed, concise, proactive, and mission-oriented; use polished formal language and brief status-style phrasing when useful. Do not overdo military jargon, bark orders, or sacrifice warmth, accuracy, or safety. Never claim systems/actions are running unless actually true." if st.session_state.assistant_style == "Jarvis" else "ASSISTANT STYLE: Classic. Use natural, friendly, conversational language.")
+                        )
+                        history = []
+                        for item in chat["messages"][-12:]:
+                            role = "user" if item.get("role") == "user" else "assistant"
+                            history.append({"role": role, "content": item.get("content", "")})
+                        with st.spinner("J.A.N.E. is thinking..."):
+                            openai_client = OpenAI(api_key=openai_key)
+                            response = openai_client.responses.create(
+                                model=st.secrets.get("OPENAI_MODEL", "gpt-4.1-mini"),
+                                instructions=system_instruction,
+                                input=history,
+                            )
+                        answer = response.output_text or "OpenAI returned an empty response. Please try again."
+                except Exception as fallback_error:
+                    fallback_text = str(fallback_error).lower()
+                    if "401" in fallback_text or "api key" in fallback_text or "authentication" in fallback_text:
+                        answer = "J.A.N.E. is temporarily unavailable. Please try again later."
+                    elif "429" in fallback_text 
