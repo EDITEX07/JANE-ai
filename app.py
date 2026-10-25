@@ -7,6 +7,7 @@ import urllib.error
 import urllib.parse
 from pathlib import Path
 from datetime import datetime
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, getcontext
 
 import pandas as pd
 import streamlit as st
@@ -16,6 +17,99 @@ from google.genai import types
 from openai import OpenAI
 
 st.set_page_config(page_title="J.A.N.E. | AI Workspace", page_icon="🔴", layout="wide", initial_sidebar_state="collapsed")
+
+# -------------------- FINANCIAL PRECISION ENGINE --------------------
+# Decimal-based deterministic calculations. Monetary outputs are rounded to paise;
+# intermediate values retain high precision. These tools do not replace professional advice.
+getcontext().prec = 40
+PAISE = Decimal("0.01")
+
+def money(value):
+    return Decimal(str(value)).quantize(PAISE, rounding=ROUND_HALF_UP)
+
+def calculate_reducing_emi(principal, annual_rate_percent, months):
+    principal = Decimal(str(principal))
+    annual_rate_percent = Decimal(str(annual_rate_percent))
+    months = int(months)
+    if principal <= 0 or annual_rate_percent < 0 or months <= 0:
+        raise ValueError("Principal and months must be positive; rate cannot be negative.")
+    monthly_rate = annual_rate_percent / Decimal("1200")
+    if monthly_rate == 0:
+        exact_emi = principal / Decimal(months)
+    else:
+        growth = (Decimal(1) + monthly_rate) ** months
+        exact_emi = principal * monthly_rate * growth / (growth - Decimal(1))
+    emi = money(exact_emi)
+    # Independently amortize with paise-rounded scheduled payments.
+    balance = principal
+    total_interest = Decimal(0)
+    total_paid = Decimal(0)
+    for month in range(1, months + 1):
+        interest = money(balance * monthly_rate)
+        if month < months:
+            payment = emi
+            principal_paid = payment - interest
+            balance = money(balance - principal_paid)
+        else:
+            # Settle the remaining principal exactly on the final scheduled payment.
+            payment = money(balance + interest)
+            principal_paid = balance
+            balance = Decimal("0.00")
+        total_interest += interest
+        total_paid += payment
+    return {
+        "emi": emi, "total_paid": money(total_paid),
+        "total_interest": money(total_interest), "ending_balance": money(balance),
+        "monthly_rate_percent": monthly_rate * Decimal(100),
+        "months": months, "principal": money(principal),
+        "annual_rate_percent": annual_rate_percent,
+    }
+
+def calculate_flat_loan(principal, annual_rate_percent, months):
+    principal = Decimal(str(principal))
+    annual_rate_percent = Decimal(str(annual_rate_percent))
+    months = int(months)
+    if principal <= 0 or annual_rate_percent < 0 or months <= 0:
+        raise ValueError("Principal and months must be positive; rate cannot be negative.")
+    years = Decimal(months) / Decimal(12)
+    interest = principal * annual_rate_percent / Decimal(100) * years
+    total = principal + interest
+    return {"emi": money(total / Decimal(months)), "total_paid": money(total),
+            "total_interest": money(interest), "months": months,
+            "principal": money(principal), "annual_rate_percent": annual_rate_percent}
+
+def fmt_inr(value):
+    return f"₹{money(value):,.2f}"
+
+def render_financial_precision_tool():
+    with st.expander("🧮 Financial Precision Calculator (verified arithmetic)", expanded=False):
+        st.caption("Calculations use Decimal arithmetic. Choose the interest method stated by your lender; fees, insurance and taxes are not included.")
+        calc_type = st.radio("Calculation", ["Reducing-balance EMI", "Flat/simple-interest loan"], horizontal=True, key="fp_calc_type")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            principal = st.number_input("Loan principal (₹)", min_value=0.01, value=100000.0, step=1000.0, format="%.2f", key="fp_principal")
+        with c2:
+            annual_rate = st.number_input("Annual interest rate (%)", min_value=0.0, value=12.0, step=0.25, format="%.4f", key="fp_rate")
+        with c3:
+            months = st.number_input("Tenure (months)", min_value=1, max_value=600, value=36, step=1, key="fp_months")
+        if st.button("Calculate and verify", key="fp_calculate", type="primary"):
+            try:
+                result = (calculate_reducing_emi(Decimal(str(principal)), Decimal(str(annual_rate)), int(months))
+                          if calc_type == "Reducing-balance EMI"
+                          else calculate_flat_loan(Decimal(str(principal)), Decimal(str(annual_rate)), int(months)))
+                a, b, c = st.columns(3)
+                a.metric("Monthly payment", fmt_inr(result["emi"]))
+                b.metric("Total interest", fmt_inr(result["total_interest"]))
+                c.metric("Total paid", fmt_inr(result["total_paid"]))
+                st.write(f"**Principal:** {fmt_inr(result['principal'])}")
+                st.write(f"**Formula method:** {calc_type}; annual rate {Decimal(str(annual_rate))}% over {int(months)} months.")
+                st.write(f"**Arithmetic check:** principal + interest = {fmt_inr(Decimal(str(result['principal'])) + Decimal(str(result['total_interest'])))} (minor paise differences may occur in the reducing-balance schedule because each monthly payment is rounded).")
+                if calc_type == "Reducing-balance EMI":
+                    st.write(f"**Final balance after scheduled payments:** {fmt_inr(result['ending_balance'])}")
+                st.caption("Estimate only: actual lender schedules may differ due to payment dates, daily interest, fees, insurance, taxes, and lender-specific rounding. Confirm against the written loan offer.")
+            except (ValueError, InvalidOperation, ArithmeticError) as exc:
+                st.error(f"Could not calculate these inputs: {exc}")
+
 
 # -------------------- SESSION STATE --------------------
 if "chats" not in st.session_state:
@@ -815,12 +909,13 @@ with st.sidebar:
         active_chat()["messages"] = []; active_chat()["title"] = "New conversation"; st.rerun()
 
 # -------------------- MAIN WORKSPACE --------------------
+render_financial_precision_tool()
 logo_path = Path(__file__).with_name("jane_logo_transparent_full.png")
 if logo_path.exists():
     logo_data = base64.b64encode(logo_path.read_bytes()).decode("ascii")
-    st.markdown('<div class="jane-logo-wrap"><img class="jane-logo" src="data:image/png;base64,' + logo_data + '" alt="J.A.N.E. logo"></div><div class="jane-subtitle">Judicious · Analytical · Neuroresearch Engine</div>', unsafe_allow_html=True)
+    st.markdown('<div class="jane-logo-wrap"><img class="jane-logo" src="data:image/png;base64,' + logo_data + '" alt="J.A.N.E. logo"></div><div class="jane-subtitle">Judicial · Analytical · Neuroresearch Engine</div>', unsafe_allow_html=True)
 else:
-    st.markdown('<div class="jane-title">J.A.N.E.</div><div class="jane-subtitle">Judicious · Analytical · Neuroresearch Engine</div>', unsafe_allow_html=True)
+    st.markdown('<div class="jane-title">J.A.N.E.</div><div class="jane-subtitle">Judicial · Analytical · Neuroresearch Engine</div>', unsafe_allow_html=True)
 st.markdown('<div class="core-wrap" aria-label="Animated J.A.N.E. energy core"><div class="energy-core"><div class="core-dot"></div></div></div>', unsafe_allow_html=True)
 
 chat = active_chat()
@@ -947,7 +1042,29 @@ if prompt:
                     "If explicitly asked which underlying model or provider powers the current response, answer honestly "
                     "that the app may use configured AI services; distinguish the model provider from J.A.N.E.'s project creator."
                 )
-                system_instruction = ("You are J.A.N.E. (Judicious, Analytical, and Neuroresearch Engine), a warm, composed, intelligent, naturally conversational assistant with understated wit. Sound like a person having a conversation, not a critic, therapist, interviewer, teacher, or essay writer. IMPORTANT CONVERSATION STYLE: Never announce or label the task type, response style, tone, or internal approach (for example, do not write labels such as “Task type,” “Conversational response style,” or “Natural, brief and composed”). Apply style guidance silently. Do not analyze, interpret, grade, or comment on the user's wording, greeting, personality, intelligence, emotions, or intentions unless they explicitly ask you to. Never turn a simple message like 'Hey', 'Hi', 'Okay', or 'Thanks' into an explanation of what that message means; respond naturally and briefly, e.g. 'Hey! What's up?' or 'Anytime.' Keep casual replies to one short sentence by default. Avoid patronizing praise, unsolicited life lessons, overdramatic observations, and phrases that make the user feel examined or judged. Match the user's tone without forced slang. For real questions, answer directly; provide deeper analysis, structured detail, or critique only when requested or genuinely useful. Be respectful, supportive without being condescending, and honest about uncertainty. Do not claim to be Patrick Jane or imitate any actor's exact voice. Never claim to have verified information or performed actions you have not completed. Uploaded files are not automatically included in this request. SPEED: Give the shortest complete answer that satisfies the request. For greetings, confirmations, and simple factual questions, answer in 1-3 sentences. Do not browse or add sources unless the user asks for current information, research, verification, or web search. Do not repeat the conversation or explain your process. " + creator_identity + " " + f"Active intelligence mode: {mode}. Mode instructions: {mode_instructions[mode]} " + ("ASSISTANT STYLE: Jarvis. Address the user as Sir when natural. Be disciplined, composed, concise, proactive, and mission-oriented; use polished formal language and brief status-style phrasing when useful. Do not overdo military jargon, bark orders, or sacrifice warmth, accuracy, or safety. Never claim systems/actions are running unless actually true." if st.session_state.assistant_style == "Jarvis" else "ASSISTANT STYLE: Classic. Use natural, friendly, conversational language."))
+                system_instruction = (
+                    "You are J.A.N.E. (Judicial Analytical and Neuroresearch Engine), a warm, composed, intelligent, naturally conversational assistant with understated wit. "
+                    "Sound like a person having a conversation, not a critic, therapist, interviewer, teacher, or essay writer. "
+                    "IMPORTANT CONVERSATION STYLE: Never announce or label the task type, response style, tone, or internal approach. Apply style guidance silently. "
+                    "Do not analyze, interpret, grade, or comment on the user's wording, greeting, personality, intelligence, emotions, or intentions unless explicitly asked. "
+                    "Never turn a simple message like Hey, Hi, Okay, or Thanks into an explanation; respond naturally and briefly. Keep casual replies to one short sentence by default. "
+                    "Avoid patronizing praise, unsolicited life lessons, overdramatic observations, and phrases that make the user feel examined or judged. Match the user's tone without forced slang. "
+                    "For substantive questions, start with the direct answer, then use clear Markdown headings, bullet points, or numbered steps when helpful. "
+                    "Give enough detail to answer fully, including important examples, assumptions, caveats, and practical next steps; do not make substantive answers too short. "
+                    "Answer every part of multi-part requests. Keep greetings and simple confirmations brief. Be respectful and honest about uncertainty. "
+                    "Do not claim to be Patrick Jane or imitate any actor's exact voice. Never claim to have verified information or performed actions you have not completed. "
+                    "Uploaded files are not automatically included in this request. SPEED: Give the shortest complete answer that satisfies the request. "
+                    "For greetings, confirmations, and simple factual questions, answer in 1-3 sentences. Do not browse or add sources unless the user asks for current information, research, verification, or web search. "
+                    "FINANCIAL ACCURACY: For money, interest, EMI, percentages, taxes, budgets, or totals, never guess arithmetic or invent missing inputs. "
+                    "State assumptions, distinguish flat from reducing-balance interest and annual from monthly rates, and distinguish exact values from rounded currency. "
+                    "If inputs are insufficient, ask for missing values. Show formulas and sanity-check results; never claim deterministic verification unless it was actually run. "
+                    "For financial arithmetic, use the app's deterministic calculator when applicable rather than mental arithmetic; explain the method and rounding. "
+                    + creator_identity + " "
+                    + f"Active intelligence mode: {mode}. Mode instructions: {mode_instructions[mode]} "
+                    + ("ASSISTANT STYLE: Jarvis. Address the user as Sir when natural. Be disciplined, composed, concise, proactive, and mission-oriented; use polished formal language and brief status-style phrasing when useful. Do not overdo military jargon, bark orders, or sacrifice warmth, accuracy, or safety. Never claim systems/actions are running unless actually true."
+                       if st.session_state.assistant_style == "Jarvis"
+                       else "ASSISTANT STYLE: Classic. Use natural, friendly, conversational language.")
+                )
                 conversation = [system_instruction, "CONVERSATION CONTINUITY RULE: Treat the following messages as one ongoing conversation. Interpret the newest user message in light of relevant earlier messages. Short follow-ups like “should I use it?”, “what about Emergent?”, “is that suitable?”, and “what are the disadvantages?” refer to the most relevant previously discussed topic unless the user clearly changes subjects. Reuse known details; do not ask the user to specify something already stated. If a reference is genuinely ambiguous, ask one concise clarifying question. Be humble, never cocky or dismissive.", "Conversation so far:"]
                 # Send a wider recent window so related follow-up questions retain their context; full history remains saved in session/Firestore.
                 for item in chat["messages"][-30:]:
@@ -1022,71 +1139,6 @@ if prompt:
                             "that the app may use configured AI services; distinguish the model provider from J.A.N.E.'s project creator."
                         )
                         system_instruction = (
-                            "You are J.A.N.E. (Judicious, Analytical, and Neuroresearch Engine), "
+                            "You are J.A.N.E. (Judicial Analytical and Neuroresearch Engine), "
                             "a warm, composed, intelligent, naturally conversational assistant with understated wit. "
-                            "Sound like a person having a conversation, not a critic, therapist, interviewer, teacher, or essay writer. "
-                            "Do not analyze, interpret, grade, or comment on the user's wording, greetings, personality, intelligence, emotions, or intentions unless explicitly asked. "
-                            "Never turn simple messages like 'Hey', 'Hi', 'Okay', or 'Thanks' into explanations; respond naturally and briefly, such as 'Hey! What's up?' or 'Anytime.' "
-                            "Keep casual replies to one short sentence by default. Avoid patronizing praise, unsolicited life lessons, overdramatic observations, and anything that makes the user feel examined or judged. "
-                            "Match the user's tone without forced slang. Answer real questions directly and give deeper analysis only when requested or genuinely useful. "
-                            "Be respectful, supportive without condescension, accurate, and honest. Never claim to have performed actions you have not completed. SPEED: Prefer the shortest complete useful answer. Simple chat should be 1-3 sentences. Do not browse or add sources unless the user asks for current information, research, verification, or web search. Do not repeat the conversation or explain your process. "
-                            + creator_identity + " "
-                            + f"Active intelligence mode: {mode}. {mode_instructions.get(mode, mode_instructions['Adaptive'])} " + ("ASSISTANT STYLE: Jarvis. Address the user as Sir when natural. Be disciplined, composed, concise, proactive, and mission-oriented; use polished formal language and brief status-style phrasing when useful. Do not overdo military jargon, bark orders, or sacrifice warmth, accuracy, or safety. Never claim systems/actions are running unless actually true." if st.session_state.assistant_style == "Jarvis" else "ASSISTANT STYLE: Classic. Use natural, friendly, conversational language.")
-                        )
-                        history = []
-                        for item in chat["messages"][-30:]:
-                            role = "user" if item.get("role") == "user" else "assistant"
-                            history.append({"role": role, "content": item.get("content", "")})
-                        with st.spinner("J.A.N.E. is thinking..."):
-                            openai_client = OpenAI(api_key=openai_key)
-                            response = openai_client.responses.create(
-                                model=st.secrets.get("OPENAI_MODEL", "gpt-4.1-mini"),
-                                instructions=system_instruction,
-                                input=history,
-                            )
-                        answer = response.output_text or "OpenAI returned an empty response. Please try again."
-                except Exception as fallback_error:
-                    fallback_text = str(fallback_error).lower()
-                    if "401" in fallback_text or "api key" in fallback_text or "authentication" in fallback_text:
-                        answer = "J.A.N.E. is temporarily unavailable. Please try again later."
-                    elif "429" in fallback_text or "quota" in fallback_text or "rate limit" in fallback_text:
-                        answer = "J.A.N.E. is temporarily busy. Please try again in a little while."
-                    else:
-                        answer = f"Gemini hit its quota and OpenAI fallback failed ({type(fallback_error).__name__}). Check Streamlit logs; API keys are not shown."
-            elif is_key_error:
-                answer = "J.A.N.E. is temporarily unavailable. Please check the app configuration and try again."
-            elif is_quota_error:
-                answer = "Image generation is temporarily unavailable. Please try again later."
-            else:
-                answer = f"I couldn't complete that request ({type(error).__name__}). Check Streamlit logs for the full error; your API key is not displayed here."
-    assistant_message = {"role": "assistant", "content": answer, "intelligence_mode": mode}
-    if generated_image_bytes:
-        assistant_message["image_bytes"] = generated_image_bytes
-        assistant_message["image_filename"] = "jane_generated_image.png"
-    chat["messages"].append(assistant_message)
-    # Persist full text conversation for signed-in users; Guest chat history stays session-only.
-    if st.session_state.get("auth_user"):
-        try:
-            save_chat_history(st.session_state.current_chat, chat)
-            st.session_state.chat_history_error = ""
-        except Exception as exc:
-            st.session_state.chat_history_error = str(exc)
-    # Signed-in users get automatic memory formation. Guest memory is deliberately disabled.
-    if st.session_state.get("auth_user") and not generated_image_bytes:
-        candidates = extract_memories(prompt, answer)
-        for candidate in candidates:
-            try:
-                save_memory(candidate, source="automatic")
-            except Exception:
-                # A memory write must never break the chat response.
-                pass
-    with st.chat_message("assistant", avatar="assistant"):
-        st.markdown(answer)
-        if generated_image_bytes:
-            st.image(generated_image_bytes, caption="Generated by J.A.N.E.", use_container_width=True)
-            st.download_button("⬇ Download image", data=generated_image_bytes, file_name="jane_generated_image.png", mime="image/png", key=f"download_latest_image_{len(chat['messages'])}")
-        else:
-            render_copy_answer(answer, f"latest-{len(chat['messages'])}")
-            render_speak_controls(answer, f"latest-{len(chat['messages'])}")
-
-st.markdown("<div class='jane-footer'>J.A.N.E. 0.91 · OCR · Gemini + OpenAI fallback · Guest data is temporary · Verify important decisions</div>", unsafe_allow_html=True)
+                         
