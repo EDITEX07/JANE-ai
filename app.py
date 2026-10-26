@@ -981,6 +981,7 @@ if prompt:
     if st.session_state.api_enabled:
         try:
             client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+            _jane_diag("gemini_client_created")
             if image_mode == "Generate image":
                 with st.spinner("J.A.N.E. is creating your image..."):
                     result = client.models.generate_content(
@@ -1140,4 +1141,4 @@ if prompt:
                         answer = response.output_text or "OpenAI returned an empty response. Please try again."
                 except Exception as fallback_error:
                     fallback_text = str(fallback_error).lower()
-                    if "401" in fallback_text or "api key" in fallback_text or "authentication" in fallback_tex
+                    if "401" in fallback_text or "api key" in f
