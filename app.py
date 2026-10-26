@@ -832,11 +832,14 @@ if st.session_state.get("workspace_mode") == "Workflow J.A.N.E.":
 
     missions = st.session_state.workflow_missions
     with st.expander("＋ Create a mission", expanded=not bool(missions)):
+        # Keep the optional-date toggle outside the form so Streamlit can rerun
+        # and show/hide the date picker before the user submits the form.
+        set_deadline = st.checkbox("Set a target date (optional)", key="workflow_set_deadline")
         with st.form("workflow_create_mission", clear_on_submit=True):
             mission_title = st.text_input("Mission name", placeholder="e.g. Build J.A.N.E. memory retrieval")
             mission_goal = st.text_area("Mission objective", placeholder="What does success look like?")
             mission_priority = st.selectbox("Priority", ["Low", "Normal", "High", "Critical"], index=1)
-            mission_deadline = st.date_input("Target date", value=None)
+            mission_deadline = st.date_input("Target date", value=datetime.now().date()) if set_deadline else None
             create_mission = st.form_submit_button("Create mission", use_container_width=True)
             if create_mission:
                 if not mission_title.strip():
@@ -1158,10 +1161,4 @@ if prompt:
             status_code = getattr(error, "status_code", None) or getattr(error, "code", None)
             is_quota_error = (
                 status_code == 429
-                or any(term in error_text for term in (
-                    "resource_exhausted", "quota exceeded", "rate limit",
-                    "too many requests", "429", "billing limit",
-                ))
-            )
-            is_key_error = any(term in error_text for term in (
-                "gemini_api_key", "secrets",
+                or any(term in error_text f
