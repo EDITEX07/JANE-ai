@@ -25,6 +25,7 @@ if "chats" not in st.session_state:
 for key, default in {
     "profile_name": "Explorer", "api_enabled": True, "uploaded_files": {},
     "pending_prompt": None, "intelligence_mode": "Adaptive", "assistant_style": "Classic",
+    "workspace_mode": "Chat", "workflow_missions": {}, "active_workflow_mission": None,
     "auth_user": None, "auth_token": None, "auth_refresh_token": None, "auth_mode": "signin", "voice_speed": 1.0, "ui_theme": "Red",
 }.items():
     if key not in st.session_state:
@@ -747,6 +748,15 @@ with st.sidebar:
             st.session_state.auth_refresh_token = None
             st.session_state.jane_entry_screen = "welcome"
             st.rerun()
+    st.divider()
+    st.markdown("### 🧭 Workspace")
+    st.selectbox(
+        "Choose workspace",
+        ["Chat", "Workflow J.A.N.E."],
+        key="workspace_mode",
+        label_visibility="collapsed",
+        help="Switch between normal J.A.N.E. chat and mission planning.",
+    )
     if st.button("＋  New chat", use_container_width=True):
         make_chat(); st.rerun()
     st.divider(); st.markdown("### 💬 Chat history")
@@ -813,6 +823,167 @@ with st.sidebar:
         st.caption("Read replies aloud using your browser/device voice; no separate voice API key is needed.")
     if st.button("🗑️ Clear current conversation", use_container_width=True):
         active_chat()["messages"] = []; active_chat()["title"] = "New conversation"; st.rerun()
+
+# -------------------- WORKFLOW J.A.N.E. --------------------
+if st.session_state.get("workspace_mode") == "Workflow J.A.N.E.":
+    st.markdown("# 🧭 Workflow J.A.N.E.")
+    st.caption("Turn a goal into a mission, organize tasks, and track progress.")
+    st.info("Workflow v1 stores missions in this active app session. Persistent, account-linked storage will be added after this first version is tested.")
+
+    missions = st.session_state.workflow_missions
+    with st.expander("＋ Create a mission", expanded=not bool(missions)):
+        with st.form("workflow_create_mission", clear_on_submit=True):
+            mission_title = st.text_input("Mission name", placeholder="e.g. Build J.A.N.E. memory retrieval")
+            mission_goal = st.text_area("Mission objective", placeholder="What does success look like?")
+            mission_priority = st.selectbox("Priority", ["Low", "Normal", "High", "Critical"], index=1)
+            mission_deadline = st.date_input("Target date", value=None)
+            create_mission = st.form_submit_button("Create mission", use_container_width=True)
+            if create_mission:
+                if not mission_title.strip():
+                    st.error("Enter a mission name first.")
+                else:
+                    mission_id = str(uuid.uuid4())
+                    missions[mission_id] = {
+                        "title": mission_title.strip()[:120],
+                        "goal": mission_goal.strip()[:3000],
+                        "priority": mission_priority,
+                        "deadline": mission_deadline.isoformat() if mission_deadline else "",
+                        "status": "Active",
+                        "created": datetime.now().isoformat(timespec="minutes"),
+                        "tasks": [],
+                        "notes": "",
+                    }
+                    st.session_state.active_workflow_mission = mission_id
+                    st.rerun()
+
+    if not missions:
+        st.markdown("### Your mission board is ready")
+        st.write("Create your first mission above. Each mission can contain tasks, progress, blockers, and a summary.")
+    else:
+        mission_ids = list(missions.keys())
+        current_id = st.session_state.get("active_workflow_mission")
+        if current_id not in missions:
+            current_id = mission_ids[-1]
+            st.session_state.active_workflow_mission = current_id
+        labels = {mid: f"{missions[mid]['title']} · {missions[mid]['status']}" for mid in mission_ids}
+        chosen_id = st.selectbox(
+            "Select mission", mission_ids,
+            index=mission_ids.index(current_id),
+            format_func=lambda mid: labels.get(mid, mid),
+            key="workflow_mission_picker",
+        )
+        st.session_state.active_workflow_mission = chosen_id
+        mission = missions[chosen_id]
+        tasks = mission.setdefault("tasks", [])
+        completed = sum(1 for task in tasks if task.get("status") == "Completed")
+        total = len(tasks)
+        progress = int((completed / total) * 100) if total else 0
+        blocked = sum(1 for task in tasks if task.get("status") == "Blocked")
+
+        top = st.columns(4)
+        top[0].metric("Progress", f"{progress}%")
+        top[1].metric("Tasks", total)
+        top[2].metric("Completed", completed)
+        top[3].metric("Blocked", blocked)
+        st.progress(progress / 100 if total else 0.0, text=f"{completed} of {total} tasks completed" if total else "Add tasks to begin tracking progress")
+
+        left, right = st.columns([3, 2])
+        with left:
+            st.markdown("### Mission overview")
+            st.markdown(f"**{mission['title']}**")
+            st.write(mission.get("goal") or "No objective added yet.")
+            meta = [f"Priority: {mission.get('priority', 'Normal')}", f"Status: {mission.get('status', 'Active')}"]
+            if mission.get("deadline"):
+                meta.append(f"Target date: {mission['deadline']}")
+            st.caption(" · ".join(meta))
+            with st.expander("Edit mission details"):
+                with st.form(f"workflow_edit_{chosen_id}"):
+                    edit_title = st.text_input("Mission name", value=mission.get("title", ""), max_chars=120)
+                    edit_goal = st.text_area("Mission objective", value=mission.get("goal", ""), max_chars=3000)
+                    edit_priority = st.selectbox("Priority", ["Low", "Normal", "High", "Critical"], index=["Low", "Normal", "High", "Critical"].index(mission.get("priority", "Normal")))
+                    edit_status = st.selectbox("Mission status", ["Active", "Paused", "Completed", "Archived"], index=["Active", "Paused", "Completed", "Archived"].index(mission.get("status", "Active")))
+                    edit_notes = st.text_area("Mission notes / blockers", value=mission.get("notes", ""), max_chars=5000)
+                    save_details = st.form_submit_button("Save mission details")
+                    if save_details:
+                        if not edit_title.strip():
+                            st.error("Mission name cannot be empty.")
+                        else:
+                            mission.update({"title": edit_title.strip(), "goal": edit_goal.strip(), "priority": edit_priority, "status": edit_status, "notes": edit_notes.strip()})
+                            st.rerun()
+        with right:
+            st.markdown("### Mission summary")
+            remaining = total - completed
+            st.write(f"**{completed}** completed · **{remaining}** remaining · **{blocked}** blocked")
+            if total == 0:
+                st.write("No tasks yet. Add the first task to turn this mission into an actionable plan.")
+            elif progress == 100:
+                st.success("All tasks are complete. Review the mission notes before archiving it.")
+            elif blocked:
+                st.warning("There are blocked tasks. Review the task list and mission notes for the next action.")
+            else:
+                next_task = next((task for task in tasks if task.get("status") != "Completed"), None)
+                if next_task:
+                    st.write("**Next task:** " + next_task.get("title", "Untitled task"))
+            if mission.get("notes", "").strip():
+                st.markdown("**Notes / blockers**")
+                st.write(mission["notes"])
+
+        st.divider()
+        st.markdown("### Task list")
+        with st.form(f"workflow_add_task_{chosen_id}", clear_on_submit=True):
+            task_title = st.text_input("New task", placeholder="Describe one concrete action")
+            task_details = st.text_input("Task details (optional)", placeholder="Notes, dependencies, or definition of done")
+            add_task = st.form_submit_button("＋ Add task", use_container_width=True)
+            if add_task:
+                if not task_title.strip():
+                    st.error("Enter a task name.")
+                else:
+                    tasks.append({"id": str(uuid.uuid4()), "title": task_title.strip()[:180], "details": task_details.strip()[:1000], "status": "Not Started"})
+                    st.rerun()
+
+        if tasks:
+            for index, task in enumerate(tasks):
+                with st.container(border=True):
+                    task_cols = st.columns([4, 2, 1])
+                    with task_cols[0]:
+                        st.markdown(f"**{index + 1}. {task.get('title', 'Untitled task')}**")
+                        if task.get("details"):
+                            st.caption(task["details"])
+                    with task_cols[1]:
+                        statuses = ["Not Started", "In Progress", "Blocked", "Completed"]
+                        old_status = task.get("status", "Not Started")
+                        if old_status not in statuses:
+                            old_status = "Not Started"
+                        new_status = st.selectbox("Status", statuses, index=statuses.index(old_status), key=f"workflow_status_{chosen_id}_{task['id']}", label_visibility="collapsed")
+                        if new_status != task.get("status"):
+                            task["status"] = new_status
+                            st.rerun()
+                    with task_cols[2]:
+                        if st.button("✕", key=f"workflow_delete_{chosen_id}_{task['id']}", help="Delete task"):
+                            mission["tasks"] = [item for item in tasks if item.get("id") != task.get("id")]
+                            st.rerun()
+
+        st.divider()
+        summary_text = (
+            f"MISSION: {mission.get('title', '')}\n"
+            f"OBJECTIVE: {mission.get('goal', '')}\n"
+            f"STATUS: {mission.get('status', 'Active')} | PRIORITY: {mission.get('priority', 'Normal')}\n"
+            f"PROGRESS: {progress}% ({completed}/{total} tasks completed)\n"
+            f"BLOCKED TASKS: {blocked}\n"
+            f"NOTES: {mission.get('notes', '')}\n"
+            "TASKS:\n" + "\n".join(f"- [{task.get('status', 'Not Started')}] {task.get('title', '')}" + (f" — {task.get('details', '')}" if task.get('details') else "") for task in tasks)
+        )
+        export_col, delete_col = st.columns(2)
+        with export_col:
+            st.download_button("⬇ Export mission summary", data=summary_text, file_name="jane_workflow_mission.txt", mime="text/plain", use_container_width=True)
+        with delete_col:
+            if st.button("Delete this mission", key=f"workflow_delete_mission_{chosen_id}", use_container_width=True):
+                del missions[chosen_id]
+                st.session_state.active_workflow_mission = next(iter(missions), None)
+                st.rerun()
+
+    st.caption("Workflow J.A.N.E. v1 · Mission data is session-only in this first implementation.")
+    st.stop()
 
 # -------------------- MAIN WORKSPACE --------------------
 logo_path = Path(__file__).with_name("jane_logo_transparent_full.png")
@@ -993,100 +1164,4 @@ if prompt:
                 ))
             )
             is_key_error = any(term in error_text for term in (
-                "gemini_api_key", "secrets", "api key", "unauthorized", "401", "403"
-            ))
-
-            # Only fall back for TEXT chat quota/rate-limit failures.
-            # Image generation is left on Gemini because OpenAI image generation
-            # requires a separate image API flow and should not be silently substituted.
-            if is_quota_error and image_mode != "Generate image":
-                try:
-                    openai_key = st.secrets.get("OPENAI_API_KEY", "")
-                    if not openai_key:
-                        answer = (
-                            "J.A.N.E. is temporarily unable to answer. Please try again in a little while."
-                        )
-                    else:
-                        mode_instructions = {
-                            "General": "Use natural, direct conversation. Keep simple answers short and avoid unnecessary headings or analysis.",
-                            "Adaptive": "Silently infer what the user needs and adapt naturally. Never announce or label the task type, response style, or internal approach. Prefer natural prose; use steps or structure only when genuinely useful. Ask questions only when essential.",
-                            "Thinker": "For complex tasks, check assumptions, alternatives, trade-offs, edge cases, failure points, and calculations. Give a clear conclusion with useful rationale, without revealing private chain-of-thought. Stay concise for simple chat.",
-                        }
-                        creator_age = 13 + (datetime.now().year - 2026)
-                        creator_identity = (
-                            "Identity rules: You are J.A.N.E. (Judicial Analytical and Neuroresearch Engine), "
-                            "the user's assistant project. If asked who created J.A.N.E., identify its project creator "
-                            "as Vihaan Shirale (EDITEX07), with Tanish Khandare as development partner. "
-                            "Do not say J.A.N.E. was created by ChatGPT or by Gemini. Do not invent ages or biographical details. "
-                            "If explicitly asked which underlying model or provider powers the current response, answer honestly "
-                            "that the app may use configured AI services; distinguish the model provider from J.A.N.E.'s project creator."
-                        )
-                        system_instruction = (
-                            "You are J.A.N.E. (Judicious, Analytical, and Neuroresearch Engine), "
-                            "a warm, composed, intelligent, naturally conversational assistant with understated wit. "
-                            "Sound like a person having a conversation, not a critic, therapist, interviewer, teacher, or essay writer. "
-                            "Do not analyze, interpret, grade, or comment on the user's wording, greetings, personality, intelligence, emotions, or intentions unless explicitly asked. "
-                            "Never turn simple messages like 'Hey', 'Hi', 'Okay', or 'Thanks' into explanations; respond naturally and briefly, such as 'Hey! What's up?' or 'Anytime.' "
-                            "Keep casual replies to one short sentence by default. Avoid patronizing praise, unsolicited life lessons, overdramatic observations, and anything that makes the user feel examined or judged. "
-                            "Match the user's tone without forced slang. Answer real questions directly and give deeper analysis only when requested or genuinely useful. "
-                            "Be respectful, supportive without condescension, accurate, and honest. Never claim to have performed actions you have not completed. SPEED: Prefer the shortest complete useful answer. Simple chat should be 1-3 sentences. Do not browse or add sources unless the user asks for current information, research, verification, or web search. Do not repeat the conversation or explain your process. "
-                            + creator_identity + " "
-                            + f"Active intelligence mode: {mode}. {mode_instructions.get(mode, mode_instructions['Adaptive'])} " + ("ASSISTANT STYLE: Jarvis. Address the user as Sir when natural. Be disciplined, composed, concise, proactive, and mission-oriented; use polished formal language and brief status-style phrasing when useful. Do not overdo military jargon, bark orders, or sacrifice warmth, accuracy, or safety. Never claim systems/actions are running unless actually true." if st.session_state.assistant_style == "Jarvis" else "ASSISTANT STYLE: Classic. Use natural, friendly, conversational language.")
-                        )
-                        history = []
-                        for item in chat["messages"][-12:]:
-                            role = "user" if item.get("role") == "user" else "assistant"
-                            history.append({"role": role, "content": item.get("content", "")})
-                        with st.spinner("J.A.N.E. is thinking..."):
-                            openai_client = OpenAI(api_key=openai_key)
-                            response = openai_client.responses.create(
-                                model=st.secrets.get("OPENAI_MODEL", "gpt-4.1-mini"),
-                                instructions=system_instruction,
-                                input=history,
-                            )
-                        answer = response.output_text or "OpenAI returned an empty response. Please try again."
-                except Exception as fallback_error:
-                    fallback_text = str(fallback_error).lower()
-                    if "401" in fallback_text or "api key" in fallback_text or "authentication" in fallback_text:
-                        answer = "J.A.N.E. is temporarily unavailable. Please try again later."
-                    elif "429" in fallback_text or "quota" in fallback_text or "rate limit" in fallback_text:
-                        answer = "J.A.N.E. is temporarily busy. Please try again in a little while."
-                    else:
-                        answer = f"Gemini hit its quota and OpenAI fallback failed ({type(fallback_error).__name__}). Check Streamlit logs; API keys are not shown."
-            elif is_key_error:
-                answer = "J.A.N.E. is temporarily unavailable. Please check the app configuration and try again."
-            elif is_quota_error:
-                answer = "Image generation is temporarily unavailable. Please try again later."
-            else:
-                answer = f"I couldn't complete that request ({type(error).__name__}). Check Streamlit logs for the full error; your API key is not displayed here."
-    assistant_message = {"role": "assistant", "content": answer, "intelligence_mode": mode}
-    if generated_image_bytes:
-        assistant_message["image_bytes"] = generated_image_bytes
-        assistant_message["image_filename"] = "jane_generated_image.png"
-    chat["messages"].append(assistant_message)
-    # Persist full text conversation for signed-in users; Guest chat history stays session-only.
-    if st.session_state.get("auth_user"):
-        try:
-            save_chat_history(st.session_state.current_chat, chat)
-            st.session_state.chat_history_error = ""
-        except Exception as exc:
-            st.session_state.chat_history_error = str(exc)
-    # Signed-in users get automatic memory formation. Guest memory is deliberately disabled.
-    if st.session_state.get("auth_user") and not generated_image_bytes:
-        candidates = extract_memories(prompt, answer)
-        for candidate in candidates:
-            try:
-                save_memory(candidate, source="automatic")
-            except Exception:
-                # A memory write must never break the chat response.
-                pass
-    with st.chat_message("assistant", avatar="assistant"):
-        st.markdown(answer)
-        if generated_image_bytes:
-            st.image(generated_image_bytes, caption="Generated by J.A.N.E.", use_container_width=True)
-            st.download_button("⬇ Download image", data=generated_image_bytes, file_name="jane_generated_image.png", mime="image/png", key=f"download_latest_image_{len(chat['messages'])}")
-        else:
-            render_copy_answer(answer, f"latest-{len(chat['messages'])}")
-            render_speak_controls(answer, f"latest-{len(chat['messages'])}")
-
-st.markdown("<div class='jane-footer'>J.A.N.E. 0.91 · OCR · Gemini + OpenAI fallback · Guest data is temporary · Verify important decisions</div>", unsafe_allow_html=True)
+                "gemini_api_key", "secrets",
