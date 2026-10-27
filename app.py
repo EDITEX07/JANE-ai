@@ -1159,6 +1159,7 @@ if prompt:
         except Exception as error:
             error_text = str(error).lower()
             status_code = getattr(error, "status_code", None) or getattr(error, "code", None)
-            is_quota_error = (
-                status_code == 429
-                or any(term in error_text f
+            quota_terms = (
+                "resource_exhausted",
+                "quota exceeded",
+         
