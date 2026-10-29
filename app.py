@@ -15,7 +15,14 @@ from google import genai
 from google.genai import types
 from openai import OpenAI
 
-st.set_page_config(page_title="J.A.N.E. | AI Workspace", page_icon="app-logo.png", layout="wide", initial_sidebar_state="collapsed")
+_page_icon = Path(__file__).with_name("app-logo.png")
+st.set_page_config(page_title="J.A.N.E. | AI Workspace", page_icon=str(_page_icon) if _page_icon.exists() else "🔴", layout="wide", initial_sidebar_state="collapsed")
+
+# Browser-based speech-to-text component. Microphone audio stays in the browser;
+# only the recognized transcript is sent to the Python chat flow.
+_jane_voice_component = components.declare_component(
+    "jane_voice_input", path=str(Path(__file__).parent / "voice_component")
+)
 
 # -------------------- SESSION STATE --------------------
 if "chats" not in st.session_state:
@@ -937,8 +944,15 @@ image_mode = st.selectbox(
     help="Choose Generate image to create an actual image from your description.",
     label_visibility="collapsed",
 )
+voice_event = _jane_voice_component(key="jane_voice_input", default=None)
 submitted_prompt = st.chat_input("Describe an image…" if image_mode == "Generate image" else "Message J.A.N.E....", key="jane_chat_input")
 prompt = submitted_prompt.strip() if submitted_prompt else None
+if isinstance(voice_event, dict) and voice_event.get("action") == "submit":
+    voice_transcript = str(voice_event.get("transcript", "")).strip()
+    if voice_transcript:
+        prompt = voice_transcript
+    else:
+        st.warning("I couldn't recognize speech. Try recording again or type your message.")
 if st.session_state.pending_prompt:
     prompt = st.session_state.pending_prompt; st.session_state.pending_prompt = None
 
@@ -1206,4 +1220,4 @@ if prompt:
             render_copy_answer(answer, f"latest-{len(chat['messages'])}")
             render_speak_controls(answer, f"latest-{len(chat['messages'])}")
 
-st.markdown("<div class='jane-footer'>J.A.N.E. 0.91 · OCR · Gemini + OpenAI fallback · Guest data is temporary · Verify important decisions</div>", unsafe_allow_html=True)
+st.markdown("<div class='jane-footer'>J.A.N.E. 1.02 · Voice input · OCR · Guest data is temporary · Verify important decisions</div>", unsafe_allow_html=True)
