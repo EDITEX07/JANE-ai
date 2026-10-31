@@ -15,7 +15,7 @@ from google import genai
 from google.genai import types
 from openai import OpenAI
 
-st.set_page_config(page_title="J.A.N.E. | AI Workspace", page_icon="🔴", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="J.A.N.E. | AI Workspace", page_icon="app-logo.png", layout="wide", initial_sidebar_state="collapsed")
 
 # -------------------- SESSION STATE --------------------
 if "chats" not in st.session_state:
