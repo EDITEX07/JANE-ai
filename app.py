@@ -1025,6 +1025,52 @@ if prompt:
                 st.session_state.chat_history_error = str(exc)
         st.rerun()
 
+    # -------------------- SPECIAL IMAGE COMMANDS --------------------
+    normalized_prompt = " ".join(prompt.lower().strip().split())
+
+    special_images = {
+        "i want image one": (
+            "Image One",
+            "https://raw.githubusercontent.com/EDITEX07/JANE-ai/main/special-image.jpg"
+        ),
+        "i want image two": (
+            "Image Two",
+            "https://raw.githubusercontent.com/EDITEX07/JANE-ai/main/special-image-1.jpg"
+        ),
+    }
+
+    if normalized_prompt in special_images:
+        image_name, image_url = special_images[normalized_prompt]
+
+        chat = active_chat()
+        mode = st.session_state.intelligence_mode
+
+        chat["messages"].append({
+            "role": "user",
+            "content": prompt,
+            "attachments": [],
+            "intelligence_mode": mode,
+        })
+
+        update_chat_title(chat, prompt)
+
+        answer = f"Here is {image_name}.\n\n![{image_name}]({image_url})"
+
+        chat["messages"].append({
+            "role": "assistant",
+            "content": answer,
+            "intelligence_mode": mode,
+        })
+
+        if st.session_state.get("auth_user"):
+            try:
+                save_chat_history(st.session_state.current_chat, chat)
+                st.session_state.chat_history_error = ""
+            except Exception as exc:
+                st.session_state.chat_history_error = str(exc)
+
+        st.rerun()
+
     attachment_names = list(st.session_state.uploaded_files.keys())
     mode = st.session_state.intelligence_mode
     chat["messages"].append({"role": "user", "content": prompt, "attachments": attachment_names, "intelligence_mode": mode})
