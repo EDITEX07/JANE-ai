@@ -257,20 +257,21 @@ div[class*="st-key-open_assistant_style_dialog"] button{min-height:28px!importan
 [data-testid="stChatInput"] button{position:absolute!important;right:10px!important;bottom:10px!important;z-index:5!important;flex:0 0 auto!important;min-width:38px!important;width:38px!important;height:38px!important;display:flex!important;align-items:center!important;justify-content:center!important}
 [data-testid="stChatInput"] form,[data-testid="stChatInput"]>div{position:relative!important;min-width:0!important;box-sizing:border-box!important}[data-testid="stChatInput"] textarea::placeholder{color:#d0c5cc!important;opacity:1!important}[data-testid="stChatInput"] button{background:#ff465c!important;color:#fff!important;border:0!important;border-radius:50%!important}
 .stButton>button{min-height:42px;border-radius:12px;border:1px solid var(--jane-border);background:#211923;color:#f4f4f5;transition:border-color .2s ease}.stButton>button:hover{border-color:var(--jane-red);color:#fff}[data-testid="stFileUploader"]{background:rgba(21,19,26,.85);border-radius:14px}h1,h2,h3{color:#ff5267}p,label,li{overflow-wrap:anywhere}.jane-footer{color:#898491;font-size:11px;text-align:center;padding:12px 4px 5px}
-/* Two interactive task rails: they move in opposite directions. */
-.jane-task-heading{text-align:center;font-size:clamp(25px,5vw,35px);font-weight:800;color:#f7f3f6;margin:4px 0 5px;}
+/* Seamless duplicated tracks: no empty gap when one cycle finishes. */
+.jane-task-heading{text-align:center;font-size:clamp(25px,5vw,35px);font-weight:800;color:#f7f3f6;margin:8px 0 5px;}
 .jane-task-subtitle{text-align:center;color:var(--jane-muted);font-size:14px;margin:0 0 14px;}
-.st-key-jane_task_rail_top,.st-key-jane_task_rail_bottom{width:100%;max-width:100%;overflow:hidden!important;position:relative;margin:8px 0 12px;}
-.st-key-jane_task_rail_top [data-testid="stHorizontalBlock"],.st-key-jane_task_rail_bottom [data-testid="stHorizontalBlock"]{width:max-content!important;min-width:max-content!important;flex-wrap:nowrap!important;gap:9px!important;}
-.st-key-jane_task_rail_top [data-testid="stHorizontalBlock"]{animation:janeTaskLeft 34s linear infinite;}
-.st-key-jane_task_rail_bottom [data-testid="stHorizontalBlock"]{animation:janeTaskRight 38s linear infinite;}
-.st-key-jane_task_rail_top:hover [data-testid="stHorizontalBlock"],.st-key-jane_task_rail_bottom:hover [data-testid="stHorizontalBlock"]{animation-play-state:paused;}
-.st-key-jane_task_rail_top [data-testid="column"],.st-key-jane_task_rail_bottom [data-testid="column"]{flex:0 0 205px!important;width:205px!important;min-width:205px!important;}
-.st-key-jane_task_rail_top .stButton>button,.st-key-jane_task_rail_bottom .stButton>button{width:205px!important;min-height:62px!important;height:62px!important;white-space:normal!important;line-height:1.25!important;border-radius:19px!important;padding:8px 14px!important;background:linear-gradient(145deg,rgba(53,27,39,.96),rgba(22,17,25,.98))!important;border:1px solid rgba(255,90,115,.38)!important;color:#f7edf1!important;font-size:13px!important;font-weight:650!important;box-shadow:0 4px 17px rgba(0,0,0,.22)!important;}
+.st-key-jane_task_rail_top,.st-key-jane_task_rail_bottom{display:block!important;width:100%!important;max-width:100%!important;overflow:hidden!important;position:relative!important;margin:9px 0 13px!important;}
+.st-key-jane_task_rail_top [data-testid="stHorizontalBlock"],.st-key-jane_task_rail_bottom [data-testid="stHorizontalBlock"]{display:flex!important;width:max-content!important;min-width:max-content!important;max-width:none!important;flex-wrap:nowrap!important;gap:9px!important;will-change:transform;}
+.st-key-jane_task_rail_top [data-testid="stHorizontalBlock"]{animation:janeTaskLeft 58s linear infinite!important;}
+.st-key-jane_task_rail_bottom [data-testid="stHorizontalBlock"]{animation:janeTaskRight 64s linear infinite!important;}
+.st-key-jane_task_rail_top [data-testid="column"],.st-key-jane_task_rail_bottom [data-testid="column"]{flex:0 0 196px!important;width:196px!important;min-width:196px!important;max-width:196px!important;}
+.st-key-jane_task_rail_top .stButton,.st-key-jane_task_rail_bottom .stButton{width:100%!important;}
+.st-key-jane_task_rail_top .stButton>button,.st-key-jane_task_rail_bottom .stButton>button{width:196px!important;min-width:196px!important;min-height:62px!important;height:62px!important;white-space:normal!important;line-height:1.25!important;border-radius:22px!important;padding:8px 13px!important;background:linear-gradient(145deg,rgba(53,27,39,.96),rgba(22,17,25,.98))!important;border:1px solid rgba(255,90,115,.38)!important;color:#f7edf1!important;font-size:13px!important;font-weight:650!important;box-shadow:0 4px 17px rgba(0,0,0,.22)!important;}
 .st-key-jane_task_rail_top .stButton>button:hover,.st-key-jane_task_rail_bottom .stButton>button:hover{border-color:var(--jane-red)!important;background:linear-gradient(145deg,rgba(105,20,44,.98),rgba(34,17,27,.98))!important;transform:translateY(-2px);}
-@keyframes janeTaskLeft{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-@keyframes janeTaskRight{from{transform:translateX(-50%)}to{transform:translateX(0)}}
-@media(max-width:768px){.jane-task-heading{font-size:27px}.jane-task-subtitle{font-size:12px}.st-key-jane_task_rail_top [data-testid="column"],.st-key-jane_task_rail_bottom [data-testid="column"]{flex-basis:185px!important;width:185px!important;min-width:185px!important}.st-key-jane_task_rail_top .stButton>button,.st-key-jane_task_rail_bottom .stButton>button{width:185px!important;min-height:58px!important;height:58px!important;font-size:12px!important}}
+@keyframes janeTaskLeft{from{transform:translate3d(0,0,0)}to{transform:translate3d(-50%,0,0)}}
+@keyframes janeTaskRight{from{transform:translate3d(-50%,0,0)}to{transform:translate3d(0,0,0)}}
+@media(max-width:768px){.jane-task-heading{font-size:27px}.jane-task-subtitle{font-size:12px}.st-key-jane_task_rail_top [data-testid="column"],.st-key-jane_task_rail_bottom [data-testid="column"]{flex-basis:178px!important;width:178px!important;min-width:178px!important;max-width:178px!important}.st-key-jane_task_rail_top .stButton>button,.st-key-jane_task_rail_bottom .stButton>button{width:178px!important;min-width:178px!important;min-height:58px!important;height:58px!important;font-size:12px!important}}
+@media(prefers-reduced-motion:reduce){.st-key-jane_task_rail_top [data-testid="stHorizontalBlock"],.st-key-jane_task_rail_bottom [data-testid="stHorizontalBlock"]{animation:none!important}}
 @media(max-width:768px){.block-container{padding:.7rem .65rem 130px!important;max-width:100%}.jane-logo{width:130px}.jane-subtitle{font-size:9px;letter-spacing:2px}.core-wrap{height:75px;margin:8px auto 15px}.energy-core{width:58px;height:58px}[data-testid="stChatInput"]{border-radius:20px!important;padding:38px 12px 8px!important;min-height:112px!important;max-height:156px!important}div[class*="st-key-open_intelligence_dialog"]{left:24px!important;bottom:169px!important;max-width:180px!important}div[class*="st-key-open_assistant_style_dialog"]{left:190px!important;bottom:169px!important;max-width:145px!important}.stButton>button{min-height:44px;font-size:14px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 </style>''', unsafe_allow_html=True)
@@ -938,24 +939,32 @@ if not chat["messages"]:
             unsafe_allow_html=True,
         )
     else:
-        st.markdown('<div class="jane-task-heading">Put J.A.N.E. to work</div><div class="jane-task-subtitle">Pick a task to get started</div>', unsafe_allow_html=True)
+        st.markdown('<div class="welcome-wrap"><div class="welcome-title">What can I help with?</div><div class="welcome-copy">Research, analyze, organize, and think deeper with J.A.N.E.</div></div>', unsafe_allow_html=True)
 
-    # Each rail contains the original starter prompts plus useful task choices.
-    # Repeating the four chips creates a continuous marquee; all chips remain clickable.
+    st.markdown('<div class="jane-task-heading">Put J.A.N.E. to work</div><div class="jane-task-subtitle">Choose a task — swipe or watch the ideas flow</div>', unsafe_allow_html=True)
+
+    # Each row is duplicated exactly once so the animation loops seamlessly.
+    # Buttons remain real Streamlit controls and submit their prompt to J.A.N.E.
     task_rails = [
         ("jane_task_rail_top", [
-            "Help me plan an online business", "Analyze a business idea",
-            "Explain a difficult topic", "Research a topic",
+            "Build a business plan", "Validate my startup idea", "Research a profitable niche",
+            "Analyze my competitors", "Define my target customers", "Create a pricing strategy",
+            "Plan my startup budget", "Choose a business model", "Find product opportunities",
+            "Create a 90-day business roadmap", "Evaluate business risks", "Explore expansion ideas",
         ]),
         ("jane_task_rail_bottom", [
-            "Create a business strategy", "Compare two options",
-            "Help me build a project", "Solve a problem step by step",
+            "Create a marketing strategy", "Build a social media calendar", "Plan an ad campaign",
+            "Write high-converting ad copy", "Improve my sales funnel", "Develop a brand identity",
+            "Plan an SEO strategy", "Create an email marketing plan", "Find growth opportunities",
+            "Analyze customer feedback", "Show me today's top business news",
+            "Show me the latest marketing trends", "Summarize today's technology news",
+            "Track major economy and market news",
         ]),
     ]
     for rail_key, rail_tasks in task_rails:
         with st.container(key=rail_key):
-            rail_columns = st.columns(8, gap="small")
             repeated_tasks = rail_tasks + rail_tasks
+            rail_columns = st.columns(len(repeated_tasks), gap="small")
             for task_index, task_text in enumerate(repeated_tasks):
                 with rail_columns[task_index]:
                     if st.button(task_text, key=f"{rail_key}_{task_index}", use_container_width=True):
