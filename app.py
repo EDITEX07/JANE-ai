@@ -614,34 +614,46 @@ html,body,[class*="css"]{font-family:Inter,system-ui,sans-serif}
 .st-key-jane_composer_shell{
   position:fixed!important;z-index:9999!important;left:50%!important;bottom:14px!important;
   transform:translateX(-50%)!important;width:min(900px,calc(100vw - 28px))!important;
-  max-width:900px!important;margin:0!important;padding:10px 12px!important;
-  border:1px solid var(--jane-accent,#ff465c)!important;border-radius:22px!important;
+  max-width:900px!important;margin:0!important;padding:5px 9px!important;
+  border:1px solid var(--jane-accent,#ff465c)!important;border-radius:20px!important;
   background:linear-gradient(125deg,var(--jane-accent,#ff465c) 0%,var(--jane-deep,#5a1023) 32%,#1b0e16 67%,#08080b 100%)!important;
   box-shadow:0 5px 24px rgba(0,0,0,.45)!important;overflow:visible!important;
 }
-.st-key-jane_composer_shell [data-testid="stHorizontalBlock"]{align-items:center!important;gap:10px!important}
-.st-key-jane_composer_shell [data-testid="stForm"]{border:0!important;padding:0!important;background:transparent!important;}
-.st-key-jane_composer_shell [data-testid="stTextArea"]{margin:0!important;}
+.st-key-jane_composer_shell [data-testid="stHorizontalBlock"]{
+  align-items:center!important;gap:7px!important;min-height:46px!important;
+}
+.st-key-jane_composer_shell [data-testid="stVerticalBlock"]{gap:0!important;}
+.st-key-jane_composer_shell [data-testid="stForm"]{
+  border:0!important;padding:0!important;background:transparent!important;margin:0!important;
+}
+.st-key-jane_composer_shell [data-testid="stTextArea"]{margin:0!important;padding:0!important;}
 .st-key-jane_composer_shell [data-testid="stTextArea"] textarea{
   box-sizing:border-box!important;width:100%!important;color:#fff!important;background:rgba(8,8,11,.18)!important;
-  border:0!important;box-shadow:none!important;font-size:16px!important;line-height:1.45!important;
-  min-height:62px!important;max-height:110px!important;resize:vertical!important;padding:10px 8px!important;
+  border:0!important;box-shadow:none!important;font-size:15px!important;line-height:1.4!important;
+  height:46px!important;min-height:46px!important;max-height:96px!important;resize:none!important;
+  padding:9px 7px!important;overflow-y:auto!important;
 }
 .st-key-jane_composer_shell [data-testid="stTextArea"] textarea::placeholder{color:rgba(255,255,255,.78)!important;opacity:1!important;}
-.st-key-jane_composer_shell [data-testid="stPopover"]{width:42px!important;min-width:42px!important;}
+.st-key-jane_composer_shell [data-testid="stPopover"]{width:38px!important;min-width:38px!important;}
 .st-key-jane_composer_shell [data-testid="stPopover"]>button{
   display:flex!important;align-items:center!important;justify-content:center!important;
-  width:40px!important;min-width:40px!important;height:40px!important;min-height:40px!important;
+  width:36px!important;min-width:36px!important;height:36px!important;min-height:36px!important;
   padding:0!important;margin:0!important;border-radius:50%!important;
   background:var(--jane-accent,#ff465c)!important;border:1px solid var(--jane-accent,#ff465c)!important;
-  color:#fff!important;font-size:25px!important;font-weight:500!important;line-height:1!important;
-  box-shadow:0 0 14px color-mix(in srgb,var(--jane-accent,#ff465c) 42%,transparent)!important;
+  color:#fff!important;font-size:23px!important;font-weight:500!important;line-height:1!important;
+  box-shadow:0 0 12px color-mix(in srgb,var(--jane-accent,#ff465c) 40%,transparent)!important;
 }
 .st-key-jane_composer_shell [data-testid="stPopover"]>button:hover{filter:brightness(1.12)!important;color:#fff!important;}
+.st-key-jane_composer_shell [data-testid="stFormSubmitButton"]{
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  margin:0!important;padding:0!important;
+}
 .st-key-jane_composer_shell [data-testid="stFormSubmitButton"] button{
-  width:40px!important;min-width:40px!important;height:40px!important;min-height:40px!important;
-  padding:0!important;border-radius:50%!important;background:var(--jane-accent,#ff465c)!important;
-  color:#fff!important;border:0!important;font-size:22px!important;font-weight:700!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  width:36px!important;min-width:36px!important;height:36px!important;min-height:36px!important;
+  padding:0!important;margin:0!important;border-radius:50%!important;
+  background:var(--jane-accent,#ff465c)!important;color:#fff!important;border:0!important;
+  font-size:21px!important;font-weight:700!important;line-height:1!important;
 }
 .st-key-jane_composer_shell [data-testid="stPopoverBody"]{
   top:auto!important;bottom:calc(100% + 10px)!important;transform:none!important;
@@ -652,9 +664,9 @@ html,body,[class*="css"]{font-family:Inter,system-ui,sans-serif}
 }
 .st-key-jane_composer_shell [data-testid="stPopoverBody"]>div{max-height:min(65vh,520px)!important;overflow-y:auto!important;}
 @media(max-width:768px){
-  .st-key-jane_composer_shell{width:calc(100vw - 20px)!important;bottom:10px!important;padding:8px!important;}
-  .st-key-jane_composer_shell [data-testid="stHorizontalBlock"]{gap:7px!important;}
-  .st-key-jane_composer_shell [data-testid="stTextArea"] textarea{min-height:58px!important;font-size:15px!important;}
+  .st-key-jane_composer_shell{width:calc(100vw - 20px)!important;bottom:10px!important;padding:4px 7px!important;}
+  .st-key-jane_composer_shell [data-testid="stHorizontalBlock"]{gap:5px!important;min-height:44px!important;}
+  .st-key-jane_composer_shell [data-testid="stTextArea"] textarea{height:44px!important;min-height:44px!important;font-size:14px!important;padding:8px 5px!important;}
 }
 div[class*="st-key-open_intelligence_dialog"]{position:fixed!important;z-index:10002!important;left:max(18px,calc((100vw - 900px)/2 + 16px))!important;bottom:169px!important;width:auto!important;max-width:190px!important;margin:0!important}
 div[class*="st-key-open_intelligence_dialog"] button{min-height:28px!important;height:28px!important;width:auto!important;padding:2px 10px!important;border-radius:999px!important;background:rgba(12,8,13,.92)!important;border:1px solid rgba(255,150,165,.55)!important;color:#fff!important;font-size:12px!important;white-space:nowrap!important}
@@ -1616,7 +1628,9 @@ image_mode = st.selectbox(
 if image_mode == "Generate image":
     st.caption("Free community-powered generation. Anonymous prompts may be shared for dataset improvement and are processed by volunteer computers; avoid private or sensitive information.")
 with st.container(key="jane_composer_shell"):
-    plus_col, message_col = st.columns([0.075, 0.925], gap="small")
+    # Compact ChatGPT-style composer: attachment at the left, message in the
+    # middle, and send control vertically centred on the same row.
+    plus_col, message_col = st.columns([0.055, 0.945], gap="small")
     with plus_col:
         with st.popover("＋", help="Attach files for J.A.N.E. to read"):
             st.markdown("**Add to your message**")
@@ -1647,7 +1661,7 @@ with st.container(key="jane_composer_shell"):
                 composer_text = st.text_area(
                     "Message J.A.N.E.",
                     placeholder="Describe an image…" if image_mode == "Generate image" else "Message J.A.N.E....",
-                    height=68,
+                    height=48,
                     key="jane_composer_text",
                     label_visibility="collapsed",
                 )
