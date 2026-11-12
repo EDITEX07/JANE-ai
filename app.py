@@ -615,13 +615,7 @@ div[class*="st-key-open_intelligence_dialog"]{position:fixed!important;z-index:1
 div[class*="st-key-open_intelligence_dialog"] button{min-height:28px!important;height:28px!important;width:auto!important;padding:2px 10px!important;border-radius:999px!important;background:rgba(12,8,13,.92)!important;border:1px solid rgba(255,150,165,.55)!important;color:#fff!important;font-size:12px!important;white-space:nowrap!important}
 div[class*="st-key-open_assistant_style_dialog"]{position:fixed!important;z-index:10002!important;left:max(205px,calc((100vw - 900px)/2 + 205px))!important;bottom:169px!important;width:auto!important;max-width:160px!important;margin:0!important}
 div[class*="st-key-open_assistant_style_dialog"] button{min-height:28px!important;height:28px!important;width:auto!important;padding:2px 10px!important;border-radius:999px!important;background:rgba(12,8,13,.92)!important;border:1px solid rgba(255,150,165,.55)!important;color:#fff!important;font-size:12px!important;white-space:nowrap!important}
-[data-testid="stChatInput"]:focus-within{border-color:#ff7182!important;box-shadow:0 0 0 1px #ff465c,0 5px 24px rgba(0,0,0,.38)!important}[data-testid="stChatInput"] textarea{box-sizing:border-box!important;width:100%!important;color:#fff!important;background:transparent!important;font-size:16px!important;line-height:1.5!important;min-height:42px!important;max-height:7.2em!important;overflow-y:auto!important;resize:none!important;padding-left:3.25rem!important;padding-right:3.2rem!important}
-/* The attachment control is visually anchored INSIDE the gradient composer. */
-.st-key-jane_plus_attachment{position:fixed!important;z-index:10020!important;left:max(18px,calc((100vw - 900px)/2 + 16px))!important;bottom:24px!important;width:42px!important;height:42px!important;margin:0!important;padding:0!important;}
-.st-key-jane_plus_attachment [data-testid="stPopover"]{width:42px!important;height:42px!important;}
-.st-key-jane_plus_attachment [data-testid="stPopover"]>button{width:38px!important;min-width:38px!important;height:38px!important;min-height:38px!important;padding:0!important;border-radius:50%!important;background:rgba(10,8,13,.9)!important;border:1px solid rgba(255,125,145,.85)!important;color:#fff!important;font-size:22px!important;box-shadow:0 0 12px rgba(255,70,92,.28)!important;}
-.st-key-jane_plus_attachment [data-testid="stPopover"]>button:hover{background:#5a1023!important;border-color:#ff7182!important;color:#fff!important;}
-@media(max-width:768px){.st-key-jane_plus_attachment{left:16px!important;bottom:24px!important;}}
+[data-testid="stChatInput"]:focus-within{border-color:#ff7182!important;box-shadow:0 0 0 1px #ff465c,0 5px 24px rgba(0,0,0,.38)!important}[data-testid="stChatInput"] textarea{box-sizing:border-box!important;width:100%!important;color:#fff!important;background:transparent!important;font-size:16px!important;line-height:1.5!important;min-height:42px!important;max-height:7.2em!important;overflow-y:auto!important;resize:none!important;padding-right:3.2rem!important}
 [data-testid="stChatInput"] button{position:absolute!important;right:10px!important;bottom:10px!important;z-index:5!important;flex:0 0 auto!important;min-width:38px!important;width:38px!important;height:38px!important;display:flex!important;align-items:center!important;justify-content:center!important}
 [data-testid="stChatInput"] form,[data-testid="stChatInput"]>div{position:relative!important;min-width:0!important;box-sizing:border-box!important}[data-testid="stChatInput"] textarea::placeholder{color:#d0c5cc!important;opacity:1!important}[data-testid="stChatInput"] button{background:#ff465c!important;color:#fff!important;border:0!important;border-radius:50%!important}
 .stButton>button{min-height:42px;border-radius:12px;border:1px solid var(--jane-border);background:#211923;color:#f4f4f5;transition:border-color .2s ease}.stButton>button:hover{border-color:var(--jane-red);color:#fff}[data-testid="stFileUploader"]{background:rgba(21,19,26,.85);border-radius:14px}h1,h2,h3{color:#ff5267}p,label,li{overflow-wrap:anywhere}.jane-footer{color:#898491;font-size:11px;text-align:center;padding:12px 4px 5px}
@@ -1578,27 +1572,26 @@ image_mode = st.selectbox(
 )
 if image_mode == "Generate image":
     st.caption("Free community-powered generation. Anonymous prompts may be shared for dataset improvement and are processed by volunteer computers; avoid private or sensitive information.")
-with st.container(key="jane_plus_attachment"):
-    with st.popover("＋", help="Attach files for J.A.N.E. to read"):
-        st.markdown("**Attach files to this conversation**")
-        plus_uploads = st.file_uploader(
-            "Choose files",
-            type=["txt", "md", "json", "csv", "xlsx", "pdf", "docx", "png", "jpg", "jpeg", "webp"],
-            accept_multiple_files=True,
-            key="jane_plus_file_uploader",
-            help="Supported: PDF, Word, Excel, CSV, text, JSON, Markdown and images. Files stay in this session.",
-        )
-        if plus_uploads:
-            for file in plus_uploads:
-                st.session_state.uploaded_files[file.name] = {
-                    "name": file.name,
-                    "data": file.getvalue(),
-                    "type": file.type,
-                    "size": file.size,
-                }
-            st.caption(f"{len(plus_uploads)} file(s) attached. Ask J.A.N.E. about them in your next message.")
-        if st.session_state.uploaded_files:
-            st.caption("Currently attached: " + ", ".join(st.session_state.uploaded_files.keys()))
+with st.popover("＋", help="Attach files for J.A.N.E. to read"):
+    st.markdown("**Attach files to this conversation**")
+    plus_uploads = st.file_uploader(
+        "Choose files",
+        type=["txt", "md", "json", "csv", "xlsx", "pdf", "docx", "png", "jpg", "jpeg", "webp"],
+        accept_multiple_files=True,
+        key="jane_plus_file_uploader",
+        help="Supported: PDF, Word, Excel, CSV, text, JSON, Markdown and images. Files stay in this session.",
+    )
+    if plus_uploads:
+        for file in plus_uploads:
+            st.session_state.uploaded_files[file.name] = {
+                "name": file.name,
+                "data": file.getvalue(),
+                "type": file.type,
+                "size": file.size,
+            }
+        st.caption(f"{len(plus_uploads)} file(s) attached. Ask J.A.N.E. about them in your next message.")
+    if st.session_state.uploaded_files:
+        st.caption("Currently attached: " + ", ".join(st.session_state.uploaded_files.keys()))
 
 submitted_prompt = st.chat_input("Describe an image…" if image_mode == "Generate image" else "Message J.A.N.E....", key="jane_chat_input")
 prompt = submitted_prompt.strip() if submitted_prompt else None
