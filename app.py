@@ -612,16 +612,18 @@ html,body,[class*="css"]{font-family:Inter,system-ui,sans-serif}
 [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"]{color:inherit!important;overflow-wrap:anywhere!important}[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p:first-child{margin-top:0!important}[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p:last-child{margin-bottom:0!important}
 /* The complete composer is one gradient surface; the plus control lives inside it. */
 .st-key-jane_composer_shell{
-  position:fixed!important;z-index:9999!important;left:50%!important;bottom:14px!important;
+  position:fixed!important;z-index:9999!important;left:50%!important;bottom:12px!important;
   transform:translateX(-50%)!important;width:min(900px,calc(100vw - 28px))!important;
-  max-width:900px!important;margin:0!important;padding:5px 9px!important;
-  border:1px solid var(--jane-accent,#ff465c)!important;border-radius:20px!important;
+  max-width:900px!important;margin:0!important;padding:3px 7px!important;
+  border:1px solid var(--jane-accent,#ff465c)!important;border-radius:18px!important;
   background:linear-gradient(125deg,var(--jane-accent,#ff465c) 0%,var(--jane-deep,#5a1023) 32%,#1b0e16 67%,#08080b 100%)!important;
-  box-shadow:0 5px 24px rgba(0,0,0,.45)!important;overflow:visible!important;
+  box-shadow:0 5px 20px rgba(0,0,0,.4)!important;overflow:visible!important;
 }
 .st-key-jane_composer_shell [data-testid="stHorizontalBlock"]{
-  align-items:center!important;gap:7px!important;min-height:46px!important;
+  display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;
+  align-items:flex-end!important;gap:6px!important;min-height:0!important;width:100%!important;
 }
+.st-key-jane_composer_shell [data-testid="column"]{min-width:0!important;}
 .st-key-jane_composer_shell [data-testid="stVerticalBlock"]{gap:0!important;}
 .st-key-jane_composer_shell [data-testid="stForm"]{
   border:0!important;padding:0!important;background:transparent!important;margin:0!important;
@@ -630,8 +632,9 @@ html,body,[class*="css"]{font-family:Inter,system-ui,sans-serif}
 .st-key-jane_composer_shell [data-testid="stTextArea"] textarea{
   box-sizing:border-box!important;width:100%!important;color:#fff!important;background:rgba(8,8,11,.18)!important;
   border:0!important;box-shadow:none!important;font-size:15px!important;line-height:1.4!important;
-  height:46px!important;min-height:46px!important;max-height:96px!important;resize:none!important;
-  padding:9px 7px!important;overflow-y:auto!important;
+  height:44px!important;min-height:44px!important;max-height:88px!important;
+  field-sizing:content!important;resize:none!important;
+  padding:7px 7px!important;overflow-y:auto!important;
 }
 .st-key-jane_composer_shell [data-testid="stTextArea"] textarea::placeholder{color:rgba(255,255,255,.78)!important;opacity:1!important;text-align:left!important;}
 .st-key-jane_composer_shell [data-testid="stTextArea"] textarea{ text-align:left!important; }
@@ -665,9 +668,10 @@ html,body,[class*="css"]{font-family:Inter,system-ui,sans-serif}
 }
 .st-key-jane_composer_shell [data-testid="stPopoverBody"]>div{max-height:min(65vh,520px)!important;overflow-y:auto!important;}
 @media(max-width:768px){
-  .st-key-jane_composer_shell{width:calc(100vw - 20px)!important;bottom:10px!important;padding:4px 7px!important;}
-  .st-key-jane_composer_shell [data-testid="stHorizontalBlock"]{gap:5px!important;min-height:44px!important;}
-  .st-key-jane_composer_shell [data-testid="stTextArea"] textarea{height:56px!important;min-height:56px!important;max-height:112px!important;field-sizing:content!important;font-size:14px!important;padding:8px 5px!important;text-align:left!important;}
+  .st-key-jane_composer_shell{width:calc(100vw - 20px)!important;bottom:8px!important;padding:3px 6px!important;}
+  .st-key-jane_composer_shell [data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;align-items:flex-end!important;gap:5px!important;min-height:0!important;}
+  .st-key-jane_composer_shell [data-testid="column"]{min-width:0!important;}
+  .st-key-jane_composer_shell [data-testid="stTextArea"] textarea{height:44px!important;min-height:44px!important;max-height:88px!important;field-sizing:content!important;font-size:14px!important;padding:7px 5px!important;text-align:left!important;}
 }
 div[class*="st-key-open_intelligence_dialog"]{position:fixed!important;z-index:10002!important;left:max(18px,calc((100vw - 900px)/2 + 16px))!important;bottom:169px!important;width:auto!important;max-width:190px!important;margin:0!important}
 div[class*="st-key-open_intelligence_dialog"] button{min-height:28px!important;height:28px!important;width:auto!important;padding:2px 10px!important;border-radius:999px!important;background:rgba(12,8,13,.92)!important;border:1px solid rgba(255,150,165,.55)!important;color:#fff!important;font-size:12px!important;white-space:nowrap!important}
@@ -1631,7 +1635,7 @@ if image_mode == "Generate image":
 with st.container(key="jane_composer_shell"):
     # Compact ChatGPT-style composer: attachment at the left, message in the
     # middle, and send control vertically centred on the same row.
-    plus_col, message_col = st.columns([0.055, 0.945], gap="small")
+    plus_col, message_col = st.columns([0.075, 0.925], gap="small")
     with plus_col:
         with st.popover("＋", help="Attach files for J.A.N.E. to read"):
             st.markdown("**Add to your message**")
@@ -1657,7 +1661,7 @@ with st.container(key="jane_composer_shell"):
                 st.caption("Attached: " + ", ".join(st.session_state.uploaded_files.keys()))
     with message_col:
         with st.form("jane_composer_form", clear_on_submit=True):
-            text_col, send_col = st.columns([0.9, 0.1], gap="small")
+            text_col, send_col = st.columns([0.86, 0.14], gap="small")
             with text_col:
                 composer_text = st.text_area(
                     "Message J.A.N.E.",
