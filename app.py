@@ -610,68 +610,20 @@ html,body,[class*="css"]{font-family:Inter,system-ui,sans-serif}
 [data-testid="stChatMessage"]:has(.jane-user-marker) [data-testid="stMarkdownContainer"] p{margin-top:0!important;margin-bottom:0!important;line-height:1.5!important}
 [data-testid="stChatMessage"]:has(.jane-user-marker){overflow:visible!important}
 [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"]{color:inherit!important;overflow-wrap:anywhere!important}[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p:first-child{margin-top:0!important}[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p:last-child{margin-bottom:0!important}
-/* The complete composer is one gradient surface; the plus control lives inside it. */
-.st-key-jane_composer_shell{
-  position:fixed!important;z-index:9999!important;left:50%!important;bottom:14px!important;
-  transform:translateX(-50%)!important;width:min(900px,calc(100vw - 28px))!important;
-  max-width:900px!important;margin:0!important;padding:5px 9px!important;
-  border:1px solid var(--jane-accent,#ff465c)!important;border-radius:20px!important;
-  background:linear-gradient(125deg,var(--jane-accent,#ff465c) 0%,var(--jane-deep,#5a1023) 32%,#1b0e16 67%,#08080b 100%)!important;
-  box-shadow:0 5px 24px rgba(0,0,0,.45)!important;overflow:visible!important;
-}
-.st-key-jane_composer_shell [data-testid="stHorizontalBlock"]{
-  align-items:center!important;gap:7px!important;min-height:46px!important;
-}
-.st-key-jane_composer_shell [data-testid="stVerticalBlock"]{gap:0!important;}
-.st-key-jane_composer_shell [data-testid="stForm"]{
-  border:0!important;padding:0!important;background:transparent!important;margin:0!important;
-}
-.st-key-jane_composer_shell [data-testid="stTextArea"]{margin:0!important;padding:0!important;}
-.st-key-jane_composer_shell [data-testid="stTextArea"] textarea{
-  box-sizing:border-box!important;width:100%!important;color:#fff!important;background:rgba(8,8,11,.18)!important;
-  border:0!important;box-shadow:none!important;font-size:15px!important;line-height:1.4!important;
-  height:46px!important;min-height:46px!important;max-height:96px!important;resize:none!important;
-  padding:9px 7px!important;overflow-y:auto!important;
-}
-.st-key-jane_composer_shell [data-testid="stTextArea"] textarea::placeholder{color:rgba(255,255,255,.78)!important;opacity:1!important;}
-.st-key-jane_composer_shell [data-testid="stPopover"]{width:38px!important;min-width:38px!important;}
-.st-key-jane_composer_shell [data-testid="stPopover"]>button{
-  display:flex!important;align-items:center!important;justify-content:center!important;
-  width:36px!important;min-width:36px!important;height:36px!important;min-height:36px!important;
-  padding:0!important;margin:0!important;border-radius:50%!important;
-  background:var(--jane-accent,#ff465c)!important;border:1px solid var(--jane-accent,#ff465c)!important;
-  color:#fff!important;font-size:23px!important;font-weight:500!important;line-height:1!important;
-  box-shadow:0 0 12px color-mix(in srgb,var(--jane-accent,#ff465c) 40%,transparent)!important;
-}
-.st-key-jane_composer_shell [data-testid="stPopover"]>button:hover{filter:brightness(1.12)!important;color:#fff!important;}
-.st-key-jane_composer_shell [data-testid="stFormSubmitButton"]{
-  display:flex!important;align-items:center!important;justify-content:center!important;
-  margin:0!important;padding:0!important;
-}
-.st-key-jane_composer_shell [data-testid="stFormSubmitButton"] button{
-  display:flex!important;align-items:center!important;justify-content:center!important;
-  width:36px!important;min-width:36px!important;height:36px!important;min-height:36px!important;
-  padding:0!important;margin:0!important;border-radius:50%!important;
-  background:var(--jane-accent,#ff465c)!important;color:#fff!important;border:0!important;
-  font-size:21px!important;font-weight:700!important;line-height:1!important;
-}
-.st-key-jane_composer_shell [data-testid="stPopoverBody"]{
-  top:auto!important;bottom:calc(100% + 10px)!important;transform:none!important;
-  transform-origin:bottom left!important;max-height:min(65vh,520px)!important;
-  overflow-y:auto!important;z-index:10030!important;background:#17131b!important;
-  border:1px solid var(--jane-border,rgba(255,70,92,.42))!important;
-  border-radius:16px!important;box-shadow:0 12px 38px rgba(0,0,0,.55)!important;
-}
-.st-key-jane_composer_shell [data-testid="stPopoverBody"]>div{max-height:min(65vh,520px)!important;overflow-y:auto!important;}
-@media(max-width:768px){
-  .st-key-jane_composer_shell{width:calc(100vw - 20px)!important;bottom:10px!important;padding:4px 7px!important;}
-  .st-key-jane_composer_shell [data-testid="stHorizontalBlock"]{gap:5px!important;min-height:44px!important;}
-  .st-key-jane_composer_shell [data-testid="stTextArea"] textarea{height:44px!important;min-height:44px!important;font-size:14px!important;padding:8px 5px!important;}
-}
+[data-testid="stChatInput"]{position:relative!important;background:linear-gradient(125deg,#a10f2b 0%,#5a1023 32%,#1b0e16 67%,#08080b 100%)!important;border:1px solid #ff465c!important;border-radius:22px!important;padding:38px 13px 8px!important;min-height:112px!important;max-height:156px!important;overflow:visible!important;box-shadow:0 5px 24px rgba(0,0,0,.45)!important}
 div[class*="st-key-open_intelligence_dialog"]{position:fixed!important;z-index:10002!important;left:max(18px,calc((100vw - 900px)/2 + 16px))!important;bottom:169px!important;width:auto!important;max-width:190px!important;margin:0!important}
 div[class*="st-key-open_intelligence_dialog"] button{min-height:28px!important;height:28px!important;width:auto!important;padding:2px 10px!important;border-radius:999px!important;background:rgba(12,8,13,.92)!important;border:1px solid rgba(255,150,165,.55)!important;color:#fff!important;font-size:12px!important;white-space:nowrap!important}
 div[class*="st-key-open_assistant_style_dialog"]{position:fixed!important;z-index:10002!important;left:max(205px,calc((100vw - 900px)/2 + 205px))!important;bottom:169px!important;width:auto!important;max-width:160px!important;margin:0!important}
 div[class*="st-key-open_assistant_style_dialog"] button{min-height:28px!important;height:28px!important;width:auto!important;padding:2px 10px!important;border-radius:999px!important;background:rgba(12,8,13,.92)!important;border:1px solid rgba(255,150,165,.55)!important;color:#fff!important;font-size:12px!important;white-space:nowrap!important}
+[data-testid="stChatInput"]:focus-within{border-color:#ff7182!important;box-shadow:0 0 0 1px #ff465c,0 5px 24px rgba(0,0,0,.38)!important}[data-testid="stChatInput"] textarea{box-sizing:border-box!important;width:100%!important;color:#fff!important;background:transparent!important;font-size:16px!important;line-height:1.5!important;min-height:42px!important;max-height:7.2em!important;overflow-y:auto!important;resize:none!important;padding-left:3.25rem!important;padding-right:3.2rem!important}
+/* The attachment control is visually anchored INSIDE the gradient composer. */
+.st-key-jane_plus_attachment{position:fixed!important;z-index:10020!important;left:max(18px,calc((100vw - 900px)/2 + 16px))!important;bottom:24px!important;width:42px!important;height:42px!important;margin:0!important;padding:0!important;}
+.st-key-jane_plus_attachment [data-testid="stPopover"]{width:42px!important;height:42px!important;}
+.st-key-jane_plus_attachment [data-testid="stPopover"]>button{width:38px!important;min-width:38px!important;height:38px!important;min-height:38px!important;padding:0!important;border-radius:50%!important;background:rgba(10,8,13,.9)!important;border:1px solid rgba(255,125,145,.85)!important;color:#fff!important;font-size:22px!important;box-shadow:0 0 12px rgba(255,70,92,.28)!important;}
+.st-key-jane_plus_attachment [data-testid="stPopover"]>button:hover{background:#5a1023!important;border-color:#ff7182!important;color:#fff!important;}
+@media(max-width:768px){.st-key-jane_plus_attachment{left:16px!important;bottom:24px!important;}}
+[data-testid="stChatInput"] button{position:absolute!important;right:10px!important;bottom:10px!important;z-index:5!important;flex:0 0 auto!important;min-width:38px!important;width:38px!important;height:38px!important;display:flex!important;align-items:center!important;justify-content:center!important}
+[data-testid="stChatInput"] form,[data-testid="stChatInput"]>div{position:relative!important;min-width:0!important;box-sizing:border-box!important}[data-testid="stChatInput"] textarea::placeholder{color:#d0c5cc!important;opacity:1!important}[data-testid="stChatInput"] button{background:#ff465c!important;color:#fff!important;border:0!important;border-radius:50%!important}
 .stButton>button{min-height:42px;border-radius:12px;border:1px solid var(--jane-border);background:#211923;color:#f4f4f5;transition:border-color .2s ease}.stButton>button:hover{border-color:var(--jane-red);color:#fff}[data-testid="stFileUploader"]{background:rgba(21,19,26,.85);border-radius:14px}h1,h2,h3{color:#ff5267}p,label,li{overflow-wrap:anywhere}.jane-footer{color:#898491;font-size:11px;text-align:center;padding:12px 4px 5px}
 /* J.A.N.E. task picker: two continuously moving rows, four cards in each row. */
 .jane-task-heading{text-align:center;font-size:clamp(25px,5vw,35px);font-weight:800;color:#f7f3f6;margin:4px 0 5px;}
@@ -756,10 +708,9 @@ st.markdown(f'''<style>
  border-color:rgba({theme["glow"]},.55)!important;
  box-shadow:0 5px 24px rgba({theme["glow"]},.12),inset 0 1px rgba(255,255,255,.055)!important;
 }}
- :root{{--jane-deep:{theme["deep"]};}}
-.st-key-jane_composer_shell{{border-color:{theme["accent"]}!important;background:linear-gradient(125deg,{theme["accent"]} 0%,{theme["deep"]} 32%,#1b0e16 67%,#08080b 100%)!important;}}
-.st-key-jane_composer_shell [data-testid="stPopover"]>button,
-.st-key-jane_composer_shell [data-testid="stFormSubmitButton"] button{{background:{theme["accent"]}!important;border-color:{theme["accent"]}!important;color:{"#17121a" if st.session_state.get("ui_theme")=="White" else "#fff"}!important;}}
+[data-testid="stChatInput"]{{border-color:{theme["accent"]}!important;background:linear-gradient(125deg,{theme["accent"]} 0%,{theme["deep"]} 32%,#1b0e16 67%,#08080b 100%)!important;}}
+[data-testid="stChatInput"]:focus-within{{border-color:{theme["bright"]}!important;box-shadow:0 0 0 1px {theme["accent"]},0 5px 24px rgba(0,0,0,.38)!important;}}
+[data-testid="stChatInput"] button{{background:{theme["accent"]}!important;color:{"#17121a" if st.session_state.get("ui_theme")=="White" else "#fff"}!important;}}
 .stButton>button:hover{{border-color:{theme["accent"]}!important;}}
 h1,h2,h3{{color:{theme["accent"]}!important;}}
 .jane-login-title,.jane-card-icon{{color:{theme["accent"]}!important;text-shadow:0 0 8px {theme["accent"]},0 0 24px rgba({theme["glow"]},.65)!important;}}
@@ -1627,48 +1578,29 @@ image_mode = st.selectbox(
 )
 if image_mode == "Generate image":
     st.caption("Free community-powered generation. Anonymous prompts may be shared for dataset improvement and are processed by volunteer computers; avoid private or sensitive information.")
-with st.container(key="jane_composer_shell"):
-    # Compact ChatGPT-style composer: attachment at the left, message in the
-    # middle, and send control vertically centred on the same row.
-    plus_col, message_col = st.columns([0.055, 0.945], gap="small")
-    with plus_col:
-        with st.popover("＋", help="Attach files for J.A.N.E. to read"):
-            st.markdown("**Add to your message**")
-            st.caption("Choose files for J.A.N.E. to read")
-            plus_uploads = st.file_uploader(
-                "Upload files",
-                type=["txt", "md", "json", "csv", "xlsx", "pdf", "docx", "png", "jpg", "jpeg", "webp"],
-                accept_multiple_files=True,
-                key="jane_plus_file_uploader",
-                help="Supported: PDF, Word, Excel, CSV, text, JSON, Markdown and images. Files stay in this session.",
-                label_visibility="collapsed",
-            )
-            if plus_uploads:
-                for file in plus_uploads:
-                    st.session_state.uploaded_files[file.name] = {
-                        "name": file.name,
-                        "data": file.getvalue(),
-                        "type": file.type,
-                        "size": file.size,
-                    }
-                st.caption(f"{len(plus_uploads)} file(s) attached. Ask J.A.N.E. about them in your next message.")
-            if st.session_state.uploaded_files:
-                st.caption("Attached: " + ", ".join(st.session_state.uploaded_files.keys()))
-    with message_col:
-        with st.form("jane_composer_form", clear_on_submit=True):
-            text_col, send_col = st.columns([0.9, 0.1], gap="small")
-            with text_col:
-                composer_text = st.text_area(
-                    "Message J.A.N.E.",
-                    placeholder="Describe an image…" if image_mode == "Generate image" else "Message J.A.N.E....",
-                    height=48,
-                    key="jane_composer_text",
-                    label_visibility="collapsed",
-                )
-            with send_col:
-                composer_submitted = st.form_submit_button("↑", use_container_width=True)
+with st.container(key="jane_plus_attachment"):
+    with st.popover("＋", help="Attach files for J.A.N.E. to read"):
+        st.markdown("**Attach files to this conversation**")
+        plus_uploads = st.file_uploader(
+            "Choose files",
+            type=["txt", "md", "json", "csv", "xlsx", "pdf", "docx", "png", "jpg", "jpeg", "webp"],
+            accept_multiple_files=True,
+            key="jane_plus_file_uploader",
+            help="Supported: PDF, Word, Excel, CSV, text, JSON, Markdown and images. Files stay in this session.",
+        )
+        if plus_uploads:
+            for file in plus_uploads:
+                st.session_state.uploaded_files[file.name] = {
+                    "name": file.name,
+                    "data": file.getvalue(),
+                    "type": file.type,
+                    "size": file.size,
+                }
+            st.caption(f"{len(plus_uploads)} file(s) attached. Ask J.A.N.E. about them in your next message.")
+        if st.session_state.uploaded_files:
+            st.caption("Currently attached: " + ", ".join(st.session_state.uploaded_files.keys()))
 
-submitted_prompt = composer_text if composer_submitted else None
+submitted_prompt = st.chat_input("Describe an image…" if image_mode == "Generate image" else "Message J.A.N.E....", key="jane_chat_input")
 prompt = submitted_prompt.strip() if submitted_prompt else None
 if st.session_state.pending_prompt:
     prompt = st.session_state.pending_prompt; st.session_state.pending_prompt = None
