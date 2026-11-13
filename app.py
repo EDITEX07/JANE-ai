@@ -610,25 +610,30 @@ html,body,[class*="css"]{font-family:Inter,system-ui,sans-serif}
 [data-testid="stChatMessage"]:has(.jane-user-marker) [data-testid="stMarkdownContainer"] p{margin-top:0!important;margin-bottom:0!important;line-height:1.5!important}
 [data-testid="stChatMessage"]:has(.jane-user-marker){overflow:visible!important}
 [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"]{color:inherit!important;overflow-wrap:anywhere!important}[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p:first-child{margin-top:0!important}[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p:last-child{margin-bottom:0!important}
-/* Two-layer composer inspired by reference: thicker outer gradient frame + compact dark inner card */
+/* Two-layer composer: retained outer gradient box size + compact top message field + bottom corner circular buttons */
 .st-key-jane_composer_shell{
   position:fixed!important;z-index:9999!important;left:50%!important;bottom:14px!important;
   transform:translateX(-50%)!important;width:min(820px,calc(100vw - 26px))!important;
-  max-width:820px!important;margin:0!important;padding:10px!important;
+  max-width:820px!important;min-height:112px!important;margin:0!important;padding:10px!important;
   border:1.5px solid var(--jane-accent,#ff465c)!important;border-radius:28px!important;
   background:linear-gradient(125deg,var(--jane-accent,#ff465c) 0%,var(--jane-deep,#5a1023) 34%,#26111c 68%,var(--jane-accent,#ff465c) 100%)!important;
   box-shadow:0 10px 32px rgba(0,0,0,.6),0 0 22px color-mix(in srgb,var(--jane-accent,#ff465c) 28%,transparent)!important;
   overflow:visible!important;box-sizing:border-box!important;
 }
 .st-key-jane_composer_inner{
-  position:relative!important;width:100%!important;margin:0!important;
-  padding:10px 12px 48px 12px!important;
+  position:relative!important;width:100%!important;min-height:92px!important;margin:0!important;
+  padding:8px 12px 44px 12px!important;
   border-radius:20px!important;background:#08080b!important;
   border:1px solid rgba(255,255,255,.07)!important;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.04)!important;
   box-sizing:border-box!important;overflow:visible!important;
 }
-.st-key-jane_composer_inner [data-testid="stVerticalBlock"]{gap:0!important;}
+.st-key-jane_composer_inner [data-testid="stVerticalBlock"],
+.st-key-jane_composer_inner [data-testid="stVerticalBlockBorderWrapper"],
+.st-key-jane_composer_inner [data-testid="stElementContainer"],
+.st-key-jane_composer_inner [data-testid="stForm"]{
+  position:static!important;gap:0!important;
+}
 .st-key-jane_composer_inner [data-testid="stForm"]{border:0!important;padding:0!important;margin:0!important;background:transparent!important;}
 .st-key-jane_composer_inner [data-testid="stTextArea"]{margin:0!important;width:100%!important;}
 .st-key-jane_composer_inner [data-testid="stTextArea"]>div,
@@ -640,8 +645,8 @@ html,body,[class*="css"]{font-family:Inter,system-ui,sans-serif}
   box-sizing:border-box!important;width:100%!important;max-width:100%!important;
   color:#f5f4f7!important;background:transparent!important;
   border:0!important;box-shadow:none!important;outline:none!important;
-  font-size:15px!important;line-height:1.4!important;text-align:left!important;
-  height:44px!important;min-height:44px!important;max-height:76px!important;
+  font-size:14.5px!important;line-height:1.35!important;text-align:left!important;
+  height:32px!important;min-height:32px!important;max-height:46px!important;
   resize:none!important;padding:2px 4px!important;overflow-y:auto!important;overflow-x:hidden!important;
 }
 .st-key-jane_composer_inner [data-testid="stTextArea"] textarea::placeholder{
@@ -649,12 +654,12 @@ html,body,[class*="css"]{font-family:Inter,system-ui,sans-serif}
 }
 /* Bottom-left circular + attachment button inside dark cover */
 .st-key-jane_composer_inner [data-testid="stPopover"]{
-  position:absolute!important;left:12px!important;bottom:8px!important;z-index:10!important;
-  width:34px!important;min-width:34px!important;max-width:34px!important;
-  height:34px!important;margin:0!important;
+  position:absolute!important;left:12px!important;bottom:8px!important;top:auto!important;right:auto!important;
+  z-index:12!important;width:34px!important;min-width:34px!important;max-width:34px!important;
+  height:34px!important;min-height:34px!important;max-height:34px!important;margin:0!important;padding:0!important;
 }
-.st-key-jane_composer_inner [data-testid="stPopover"]>button{
-  display:flex!important;align-items:center!important;justify-content:center!important;
+.st-key-jane_composer_inner [data-testid="stPopover"] button{
+  display:flex!important;align-items:center!important;justify-content:center!important;gap:0!important;
   width:34px!important;min-width:34px!important;max-width:34px!important;
   height:34px!important;min-height:34px!important;max-height:34px!important;
   padding:0!important;margin:0!important;border-radius:50%!important;
@@ -662,13 +667,13 @@ html,body,[class*="css"]{font-family:Inter,system-ui,sans-serif}
   color:#fff!important;font-size:21px!important;font-weight:500!important;line-height:1!important;
   box-shadow:0 0 12px color-mix(in srgb,var(--jane-accent,#ff465c) 45%,transparent)!important;
 }
-.st-key-jane_composer_inner [data-testid="stPopover"]>button svg{display:none!important;}
-.st-key-jane_composer_inner [data-testid="stPopover"]>button:hover{filter:brightness(1.12)!important;color:#fff!important;}
-/* Bottom-right circular upward send button inside dark cover */
+.st-key-jane_composer_inner [data-testid="stPopover"] button svg{display:none!important;width:0!important;height:0!important;}
+.st-key-jane_composer_inner [data-testid="stPopover"] button:hover{filter:brightness(1.12)!important;color:#fff!important;}
+/* Bottom-right circular upward send arrow button inside dark cover */
 .st-key-jane_composer_inner [data-testid="stFormSubmitButton"]{
-  position:absolute!important;right:12px!important;bottom:8px!important;z-index:10!important;
-  width:34px!important;min-width:34px!important;max-width:34px!important;
-  height:34px!important;margin:0!important;
+  position:absolute!important;right:12px!important;bottom:8px!important;top:auto!important;left:auto!important;
+  z-index:12!important;width:34px!important;min-width:34px!important;max-width:34px!important;
+  height:34px!important;min-height:34px!important;max-height:34px!important;margin:0!important;padding:0!important;
 }
 .st-key-jane_composer_inner [data-testid="stFormSubmitButton"] button{
   display:flex!important;align-items:center!important;justify-content:center!important;
@@ -693,10 +698,10 @@ div[data-baseweb="popover"]:has(.st-key-jane_plus_file_uploader){
 .st-key-jane_composer_inner [data-testid="stPopoverBody"]>div{max-height:min(62vh,480px)!important;overflow-y:auto!important;}
 @media(max-width:768px){
   .block-container{padding-bottom:165px!important;}
-  .st-key-jane_composer_shell{width:calc(100vw - 18px)!important;bottom:10px!important;padding:8px!important;border-radius:25px!important;}
-  .st-key-jane_composer_inner{padding:8px 10px 44px 10px!important;border-radius:18px!important;}
+  .st-key-jane_composer_shell{width:calc(100vw - 18px)!important;min-height:106px!important;bottom:10px!important;padding:8px!important;border-radius:25px!important;}
+  .st-key-jane_composer_inner{min-height:88px!important;padding:8px 10px 42px 10px!important;border-radius:18px!important;}
   .st-key-jane_composer_inner [data-testid="stPopover"],
-  .st-key-jane_composer_inner [data-testid="stPopover"]>button,
+  .st-key-jane_composer_inner [data-testid="stPopover"] button,
   .st-key-jane_composer_inner [data-testid="stFormSubmitButton"],
   .st-key-jane_composer_inner [data-testid="stFormSubmitButton"] button{
     width:32px!important;min-width:32px!important;max-width:32px!important;
@@ -704,7 +709,7 @@ div[data-baseweb="popover"]:has(.st-key-jane_plus_file_uploader){
   }
   .st-key-jane_composer_inner [data-testid="stPopover"]{left:10px!important;bottom:7px!important;}
   .st-key-jane_composer_inner [data-testid="stFormSubmitButton"]{right:10px!important;bottom:7px!important;}
-  .st-key-jane_composer_inner [data-testid="stTextArea"] textarea{height:40px!important;min-height:40px!important;font-size:15px!important;}
+  .st-key-jane_composer_inner [data-testid="stTextArea"] textarea{height:30px!important;min-height:30px!important;max-height:42px!important;font-size:14.5px!important;}
 }
 div[class*="st-key-open_intelligence_dialog"]{position:fixed!important;z-index:10002!important;left:max(18px,calc((100vw - 900px)/2 + 16px))!important;bottom:144px!important;width:auto!important;max-width:190px!important;margin:0!important}
 div[class*="st-key-open_intelligence_dialog"] button{min-height:28px!important;height:28px!important;width:auto!important;padding:2px 10px!important;border-radius:999px!important;background:rgba(12,8,13,.92)!important;border:1px solid rgba(255,150,165,.55)!important;color:#fff!important;font-size:12px!important;white-space:nowrap!important}
@@ -797,7 +802,7 @@ st.markdown(f'''<style>
  :root{{--jane-deep:{theme["deep"]};}}
 .st-key-jane_composer_shell{{border-color:{theme["accent"]}!important;background:linear-gradient(125deg,{theme["accent"]} 0%,{theme["deep"]} 34%,#26111c 68%,{theme["accent"]} 100%)!important;}}
 .st-key-jane_composer_inner{{background:#0d0b10!important;}}
-.st-key-jane_composer_inner [data-testid="stPopover"]>button,
+.st-key-jane_composer_inner [data-testid="stPopover"] button,
 .st-key-jane_composer_inner [data-testid="stFormSubmitButton"] button{{background:{theme["accent"]}!important;border-color:{theme["accent"]}!important;color:{"#17121a" if st.session_state.get("ui_theme")=="White" else "#fff"}!important;}}
 .stButton>button:hover{{border-color:{theme["accent"]}!important;}}
 h1,h2,h3{{color:{theme["accent"]}!important;}}
