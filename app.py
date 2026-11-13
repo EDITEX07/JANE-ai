@@ -610,9 +610,9 @@ html,body,[class*="css"]{font-family:Inter,system-ui,sans-serif}
 [data-testid="stChatMessage"]:has(.jane-user-marker) [data-testid="stMarkdownContainer"] p{margin-top:0!important;margin-bottom:0!important;line-height:1.5!important}
 [data-testid="stChatMessage"]:has(.jane-user-marker){overflow:visible!important}
 [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"]{color:inherit!important;overflow-wrap:anywhere!important}[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p:first-child{margin-top:0!important}[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p:last-child{margin-bottom:0!important}
-/* Two-layer composer: retained outer gradient box size + compact top message field + bottom corner circular buttons */
+/* Two-layer composer: retained outer gradient box size + compact top message field + lifted larger send button + bottom mode selectors */
 .st-key-jane_composer_shell{
-  position:fixed!important;z-index:9999!important;left:50%!important;bottom:14px!important;
+  position:fixed!important;z-index:9999!important;left:50%!important;bottom:44px!important;
   transform:translateX(-50%)!important;width:min(820px,calc(100vw - 26px))!important;
   max-width:820px!important;min-height:112px!important;margin:0!important;padding:10px!important;
   border:1.5px solid var(--jane-accent,#ff465c)!important;border-radius:28px!important;
@@ -622,7 +622,7 @@ html,body,[class*="css"]{font-family:Inter,system-ui,sans-serif}
 }
 .st-key-jane_composer_inner{
   position:relative!important;width:100%!important;min-height:92px!important;margin:0!important;
-  padding:8px 12px 44px 12px!important;
+  padding:8px 58px 44px 12px!important;
   border-radius:20px!important;background:#08080b!important;
   border:1px solid rgba(255,255,255,.07)!important;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.04)!important;
@@ -635,6 +635,10 @@ html,body,[class*="css"]{font-family:Inter,system-ui,sans-serif}
   position:static!important;gap:0!important;
 }
 .st-key-jane_composer_inner [data-testid="stForm"]{border:0!important;padding:0!important;margin:0!important;background:transparent!important;}
+.st-key-jane_composer_inner [data-testid="InputInstructions"],
+[data-testid="stForm"] [data-testid="InputInstructions"]{
+  display:none!important;visibility:hidden!important;height:0!important;width:0!important;overflow:hidden!important;opacity:0!important;pointer-events:none!important;
+}
 .st-key-jane_composer_inner [data-testid="stTextArea"]{margin:0!important;width:100%!important;}
 .st-key-jane_composer_inner [data-testid="stTextArea"]>div,
 .st-key-jane_composer_inner [data-testid="stTextArea"] [data-baseweb="textarea"],
@@ -667,22 +671,26 @@ html,body,[class*="css"]{font-family:Inter,system-ui,sans-serif}
   color:#fff!important;font-size:21px!important;font-weight:500!important;line-height:1!important;
   box-shadow:0 0 12px color-mix(in srgb,var(--jane-accent,#ff465c) 45%,transparent)!important;
 }
-.st-key-jane_composer_inner [data-testid="stPopover"] button svg{display:none!important;width:0!important;height:0!important;}
+.st-key-jane_composer_inner [data-testid="stPopover"] button svg,
+.st-key-jane_composer_inner [data-testid="stPopover"] button [data-testid="stIconMaterial"],
+.st-key-jane_composer_inner [data-testid="stPopover"] button span[data-baseweb="icon"]{
+  display:none!important;width:0!important;height:0!important;overflow:hidden!important;
+}
 .st-key-jane_composer_inner [data-testid="stPopover"] button:hover{filter:brightness(1.12)!important;color:#fff!important;}
-/* Bottom-right circular upward send arrow button inside dark cover */
+/* Larger circular upward send arrow button lifted slightly above bottom-right */
 .st-key-jane_composer_inner [data-testid="stFormSubmitButton"]{
-  position:absolute!important;right:12px!important;bottom:8px!important;top:auto!important;left:auto!important;
-  z-index:12!important;width:34px!important;min-width:34px!important;max-width:34px!important;
-  height:34px!important;min-height:34px!important;max-height:34px!important;margin:0!important;padding:0!important;
+  position:absolute!important;right:12px!important;bottom:20px!important;top:auto!important;left:auto!important;
+  z-index:14!important;width:42px!important;min-width:42px!important;max-width:42px!important;
+  height:42px!important;min-height:42px!important;max-height:42px!important;margin:0!important;padding:0!important;
 }
 .st-key-jane_composer_inner [data-testid="stFormSubmitButton"] button{
   display:flex!important;align-items:center!important;justify-content:center!important;
-  width:34px!important;min-width:34px!important;max-width:34px!important;
-  height:34px!important;min-height:34px!important;max-height:34px!important;
+  width:42px!important;min-width:42px!important;max-width:42px!important;
+  height:42px!important;min-height:42px!important;max-height:42px!important;
   padding:0!important;margin:0!important;border-radius:50%!important;
   background:var(--jane-accent,#ff465c)!important;
-  color:#fff!important;border:0!important;font-size:18px!important;font-weight:800!important;line-height:1!important;
-  box-shadow:0 0 12px color-mix(in srgb,var(--jane-accent,#ff465c) 45%,transparent)!important;
+  color:#fff!important;border:0!important;font-size:21px!important;font-weight:800!important;line-height:1!important;
+  box-shadow:0 0 14px color-mix(in srgb,var(--jane-accent,#ff465c) 50%,transparent)!important;
 }
 .st-key-jane_composer_inner [data-testid="stFormSubmitButton"] button:hover{filter:brightness(1.12)!important;}
 .st-key-jane_composer_shell [data-testid="stPopoverBody"],
@@ -697,24 +705,28 @@ div[data-baseweb="popover"]:has(.st-key-jane_plus_file_uploader){
 .st-key-jane_composer_shell [data-testid="stPopoverBody"]>div,
 .st-key-jane_composer_inner [data-testid="stPopoverBody"]>div{max-height:min(62vh,480px)!important;overflow-y:auto!important;}
 @media(max-width:768px){
-  .block-container{padding-bottom:165px!important;}
-  .st-key-jane_composer_shell{width:calc(100vw - 18px)!important;min-height:106px!important;bottom:10px!important;padding:8px!important;border-radius:25px!important;}
-  .st-key-jane_composer_inner{min-height:88px!important;padding:8px 10px 42px 10px!important;border-radius:18px!important;}
+  .block-container{padding-bottom:185px!important;}
+  .st-key-jane_composer_shell{width:calc(100vw - 18px)!important;min-height:106px!important;bottom:40px!important;padding:8px!important;border-radius:25px!important;}
+  .st-key-jane_composer_inner{min-height:88px!important;padding:8px 54px 42px 10px!important;border-radius:18px!important;}
   .st-key-jane_composer_inner [data-testid="stPopover"],
-  .st-key-jane_composer_inner [data-testid="stPopover"] button,
-  .st-key-jane_composer_inner [data-testid="stFormSubmitButton"],
-  .st-key-jane_composer_inner [data-testid="stFormSubmitButton"] button{
+  .st-key-jane_composer_inner [data-testid="stPopover"] button{
     width:32px!important;min-width:32px!important;max-width:32px!important;
     height:32px!important;min-height:32px!important;max-height:32px!important;
   }
   .st-key-jane_composer_inner [data-testid="stPopover"]{left:10px!important;bottom:7px!important;}
-  .st-key-jane_composer_inner [data-testid="stFormSubmitButton"]{right:10px!important;bottom:7px!important;}
+  .st-key-jane_composer_inner [data-testid="stFormSubmitButton"],
+  .st-key-jane_composer_inner [data-testid="stFormSubmitButton"] button{
+    width:40px!important;min-width:40px!important;max-width:40px!important;
+    height:40px!important;min-height:40px!important;max-height:40px!important;
+    font-size:20px!important;
+  }
+  .st-key-jane_composer_inner [data-testid="stFormSubmitButton"]{right:10px!important;bottom:18px!important;}
   .st-key-jane_composer_inner [data-testid="stTextArea"] textarea{height:30px!important;min-height:30px!important;max-height:42px!important;font-size:14.5px!important;}
 }
-div[class*="st-key-open_intelligence_dialog"]{position:fixed!important;z-index:10002!important;left:max(18px,calc((100vw - 900px)/2 + 16px))!important;bottom:144px!important;width:auto!important;max-width:190px!important;margin:0!important}
-div[class*="st-key-open_intelligence_dialog"] button{min-height:28px!important;height:28px!important;width:auto!important;padding:2px 10px!important;border-radius:999px!important;background:rgba(12,8,13,.92)!important;border:1px solid rgba(255,150,165,.55)!important;color:#fff!important;font-size:12px!important;white-space:nowrap!important}
-div[class*="st-key-open_assistant_style_dialog"]{position:fixed!important;z-index:10002!important;left:max(205px,calc((100vw - 900px)/2 + 205px))!important;bottom:144px!important;width:auto!important;max-width:160px!important;margin:0!important}
-div[class*="st-key-open_assistant_style_dialog"] button{min-height:28px!important;height:28px!important;width:auto!important;padding:2px 10px!important;border-radius:999px!important;background:rgba(12,8,13,.92)!important;border:1px solid rgba(255,150,165,.55)!important;color:#fff!important;font-size:12px!important;white-space:nowrap!important}
+div[class*="st-key-open_intelligence_dialog"]{position:fixed!important;z-index:10002!important;left:max(18px,calc((100vw - 820px)/2 + 12px))!important;bottom:8px!important;width:auto!important;max-width:190px!important;margin:0!important}
+div[class*="st-key-open_intelligence_dialog"] button{min-height:28px!important;height:28px!important;width:auto!important;padding:2px 11px!important;border-radius:999px!important;background:rgba(12,8,13,.95)!important;border:1px solid rgba(255,150,165,.55)!important;color:#fff!important;font-size:12px!important;white-space:nowrap!important}
+div[class*="st-key-open_assistant_style_dialog"]{position:fixed!important;z-index:10002!important;left:max(150px,calc((100vw - 820px)/2 + 148px))!important;bottom:8px!important;width:auto!important;max-width:160px!important;margin:0!important}
+div[class*="st-key-open_assistant_style_dialog"] button{min-height:28px!important;height:28px!important;width:auto!important;padding:2px 11px!important;border-radius:999px!important;background:rgba(12,8,13,.95)!important;border:1px solid rgba(255,150,165,.55)!important;color:#fff!important;font-size:12px!important;white-space:nowrap!important}
 .stButton>button{min-height:42px;border-radius:12px;border:1px solid var(--jane-border);background:#211923;color:#f4f4f5;transition:border-color .2s ease}.stButton>button:hover{border-color:var(--jane-red);color:#fff}[data-testid="stFileUploader"]{background:rgba(21,19,26,.85);border-radius:14px}h1,h2,h3{color:#ff5267}p,label,li{overflow-wrap:anywhere}.jane-footer{color:#898491;font-size:11px;text-align:center;padding:12px 4px 5px}
 /* J.A.N.E. task picker: two continuously moving rows, four cards in each row. */
 .jane-task-heading{text-align:center;font-size:clamp(25px,5vw,35px);font-weight:800;color:#f7f3f6;margin:4px 0 5px;}
