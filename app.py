@@ -610,14 +610,100 @@ html,body,[class*="css"]{font-family:Inter,system-ui,sans-serif}
 [data-testid="stChatMessage"]:has(.jane-user-marker) [data-testid="stMarkdownContainer"] p{margin-top:0!important;margin-bottom:0!important;line-height:1.5!important}
 [data-testid="stChatMessage"]:has(.jane-user-marker){overflow:visible!important}
 [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"]{color:inherit!important;overflow-wrap:anywhere!important}[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p:first-child{margin-top:0!important}[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p:last-child{margin-bottom:0!important}
-[data-testid="stChatInput"]{position:relative!important;background:linear-gradient(125deg,#a10f2b 0%,#5a1023 32%,#1b0e16 67%,#08080b 100%)!important;border:1px solid #ff465c!important;border-radius:22px!important;padding:38px 13px 8px!important;min-height:112px!important;max-height:156px!important;overflow:visible!important;box-shadow:0 5px 24px rgba(0,0,0,.45)!important}
-div[class*="st-key-open_intelligence_dialog"]{position:fixed!important;z-index:10002!important;left:max(18px,calc((100vw - 900px)/2 + 16px))!important;bottom:169px!important;width:auto!important;max-width:190px!important;margin:0!important}
+/* Two-layer composer: outer gradient frame + inner dark opaque messenger cover */
+.st-key-jane_composer_shell{
+  position:fixed!important;z-index:9999!important;left:50%!important;bottom:14px!important;
+  transform:translateX(-50%)!important;width:min(860px,calc(100vw - 28px))!important;
+  max-width:860px!important;margin:0!important;padding:5px!important;
+  border:1px solid var(--jane-accent,#ff465c)!important;border-radius:24px!important;
+  background:linear-gradient(125deg,var(--jane-accent,#ff465c) 0%,var(--jane-deep,#5a1023) 34%,#26111c 68%,var(--jane-accent,#ff465c) 100%)!important;
+  box-shadow:0 8px 28px rgba(0,0,0,.55),0 0 18px color-mix(in srgb,var(--jane-accent,#ff465c) 22%,transparent)!important;
+  overflow:visible!important;box-sizing:border-box!important;
+}
+.st-key-jane_composer_inner{
+  width:100%!important;margin:0!important;padding:6px 10px!important;
+  border-radius:19px!important;background:#0d0b10!important;
+  border:1px solid rgba(255,255,255,.07)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04)!important;
+  box-sizing:border-box!important;overflow:visible!important;
+}
+.st-key-jane_composer_inner [data-testid="stHorizontalBlock"]{
+  align-items:center!important;gap:8px!important;flex-wrap:nowrap!important;
+}
+.st-key-jane_composer_inner [data-testid="stColumn"]{min-width:0!important;}
+.st-key-jane_composer_inner [data-testid="stForm"]{border:0!important;padding:0!important;margin:0!important;background:transparent!important;}
+.st-key-jane_composer_inner [data-testid="stTextArea"]{margin:0!important;width:100%!important;}
+.st-key-jane_composer_inner [data-testid="stTextArea"]>div,
+.st-key-jane_composer_inner [data-testid="stTextArea"] [data-baseweb="textarea"],
+.st-key-jane_composer_inner [data-testid="stTextArea"] [data-baseweb="base-input"]{
+  background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;margin:0!important;
+}
+.st-key-jane_composer_inner [data-testid="stTextArea"] textarea{
+  box-sizing:border-box!important;width:100%!important;max-width:100%!important;
+  color:#f5f4f7!important;background:transparent!important;
+  border:0!important;box-shadow:none!important;outline:none!important;
+  font-size:15px!important;line-height:1.45!important;text-align:left!important;
+  height:74px!important;min-height:74px!important;max-height:124px!important;
+  resize:none!important;padding:6px 4px!important;overflow-y:auto!important;overflow-x:hidden!important;
+}
+.st-key-jane_composer_inner [data-testid="stTextArea"] textarea::placeholder{
+  color:rgba(235,232,240,.62)!important;opacity:1!important;text-align:left!important;
+}
+.st-key-jane_composer_inner [data-testid="stPopover"]{
+  width:38px!important;min-width:38px!important;max-width:38px!important;margin:0!important;
+}
+.st-key-jane_composer_inner [data-testid="stPopover"]>button{
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  width:38px!important;min-width:38px!important;max-width:38px!important;
+  height:38px!important;min-height:38px!important;max-height:38px!important;
+  padding:0!important;margin:0!important;border-radius:50%!important;
+  background:var(--jane-accent,#ff465c)!important;border:1px solid var(--jane-accent,#ff465c)!important;
+  color:#fff!important;font-size:22px!important;font-weight:600!important;line-height:1!important;
+  box-shadow:0 0 12px color-mix(in srgb,var(--jane-accent,#ff465c) 45%,transparent)!important;
+}
+.st-key-jane_composer_inner [data-testid="stPopover"]>button svg{display:none!important;}
+.st-key-jane_composer_inner [data-testid="stPopover"]>button:hover{filter:brightness(1.12)!important;color:#fff!important;}
+.st-key-jane_composer_inner [data-testid="stFormSubmitButton"]{
+  display:flex!important;justify-content:flex-end!important;align-items:center!important;margin:0!important;
+}
+.st-key-jane_composer_inner [data-testid="stFormSubmitButton"] button{
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  width:38px!important;min-width:38px!important;max-width:38px!important;
+  height:38px!important;min-height:38px!important;max-height:38px!important;
+  padding:0!important;margin:0!important;border-radius:50%!important;
+  background:var(--jane-accent,#ff465c)!important;
+  color:#fff!important;border:0!important;font-size:20px!important;font-weight:800!important;line-height:1!important;
+  box-shadow:0 0 12px color-mix(in srgb,var(--jane-accent,#ff465c) 45%,transparent)!important;
+}
+.st-key-jane_composer_inner [data-testid="stFormSubmitButton"] button:hover{filter:brightness(1.12)!important;}
+.st-key-jane_composer_shell [data-testid="stPopoverBody"],
+.st-key-jane_composer_inner [data-testid="stPopoverBody"],
+div[data-baseweb="popover"]:has(.st-key-jane_plus_file_uploader){
+  top:auto!important;bottom:calc(100% + 12px)!important;transform:none!important;
+  transform-origin:bottom left!important;max-height:min(62vh,480px)!important;
+  overflow-y:auto!important;z-index:10030!important;background:#141118!important;
+  border:1px solid var(--jane-border,rgba(255,70,92,.42))!important;
+  border-radius:16px!important;box-shadow:0 12px 38px rgba(0,0,0,.65)!important;
+}
+.st-key-jane_composer_shell [data-testid="stPopoverBody"]>div,
+.st-key-jane_composer_inner [data-testid="stPopoverBody"]>div{max-height:min(62vh,480px)!important;overflow-y:auto!important;}
+@media(max-width:768px){
+  .block-container{padding-bottom:155px!important;}
+  .st-key-jane_composer_shell{width:calc(100vw - 18px)!important;bottom:10px!important;padding:4px!important;border-radius:21px!important;}
+  .st-key-jane_composer_inner{padding:5px 8px!important;border-radius:17px!important;}
+  .st-key-jane_composer_inner [data-testid="stHorizontalBlock"]{gap:6px!important;}
+  .st-key-jane_composer_inner [data-testid="stPopover"],
+  .st-key-jane_composer_inner [data-testid="stPopover"]>button,
+  .st-key-jane_composer_inner [data-testid="stFormSubmitButton"] button{
+    width:35px!important;min-width:35px!important;max-width:35px!important;
+    height:35px!important;min-height:35px!important;max-height:35px!important;
+  }
+  .st-key-jane_composer_inner [data-testid="stTextArea"] textarea{height:68px!important;min-height:68px!important;font-size:15px!important;}
+}
+div[class*="st-key-open_intelligence_dialog"]{position:fixed!important;z-index:10002!important;left:max(18px,calc((100vw - 900px)/2 + 16px))!important;bottom:122px!important;width:auto!important;max-width:190px!important;margin:0!important}
 div[class*="st-key-open_intelligence_dialog"] button{min-height:28px!important;height:28px!important;width:auto!important;padding:2px 10px!important;border-radius:999px!important;background:rgba(12,8,13,.92)!important;border:1px solid rgba(255,150,165,.55)!important;color:#fff!important;font-size:12px!important;white-space:nowrap!important}
-div[class*="st-key-open_assistant_style_dialog"]{position:fixed!important;z-index:10002!important;left:max(205px,calc((100vw - 900px)/2 + 205px))!important;bottom:169px!important;width:auto!important;max-width:160px!important;margin:0!important}
+div[class*="st-key-open_assistant_style_dialog"]{position:fixed!important;z-index:10002!important;left:max(205px,calc((100vw - 900px)/2 + 205px))!important;bottom:122px!important;width:auto!important;max-width:160px!important;margin:0!important}
 div[class*="st-key-open_assistant_style_dialog"] button{min-height:28px!important;height:28px!important;width:auto!important;padding:2px 10px!important;border-radius:999px!important;background:rgba(12,8,13,.92)!important;border:1px solid rgba(255,150,165,.55)!important;color:#fff!important;font-size:12px!important;white-space:nowrap!important}
-[data-testid="stChatInput"]:focus-within{border-color:#ff7182!important;box-shadow:0 0 0 1px #ff465c,0 5px 24px rgba(0,0,0,.38)!important}[data-testid="stChatInput"] textarea{box-sizing:border-box!important;width:100%!important;color:#fff!important;background:transparent!important;font-size:16px!important;line-height:1.5!important;min-height:42px!important;max-height:7.2em!important;overflow-y:auto!important;resize:none!important;padding-right:3.2rem!important}
-[data-testid="stChatInput"] button{position:absolute!important;right:10px!important;bottom:10px!important;z-index:5!important;flex:0 0 auto!important;min-width:38px!important;width:38px!important;height:38px!important;display:flex!important;align-items:center!important;justify-content:center!important}
-[data-testid="stChatInput"] form,[data-testid="stChatInput"]>div{position:relative!important;min-width:0!important;box-sizing:border-box!important}[data-testid="stChatInput"] textarea::placeholder{color:#d0c5cc!important;opacity:1!important}[data-testid="stChatInput"] button{background:#ff465c!important;color:#fff!important;border:0!important;border-radius:50%!important}
 .stButton>button{min-height:42px;border-radius:12px;border:1px solid var(--jane-border);background:#211923;color:#f4f4f5;transition:border-color .2s ease}.stButton>button:hover{border-color:var(--jane-red);color:#fff}[data-testid="stFileUploader"]{background:rgba(21,19,26,.85);border-radius:14px}h1,h2,h3{color:#ff5267}p,label,li{overflow-wrap:anywhere}.jane-footer{color:#898491;font-size:11px;text-align:center;padding:12px 4px 5px}
 /* J.A.N.E. task picker: two continuously moving rows, four cards in each row. */
 .jane-task-heading{text-align:center;font-size:clamp(25px,5vw,35px);font-weight:800;color:#f7f3f6;margin:4px 0 5px;}
@@ -702,9 +788,11 @@ st.markdown(f'''<style>
  border-color:rgba({theme["glow"]},.55)!important;
  box-shadow:0 5px 24px rgba({theme["glow"]},.12),inset 0 1px rgba(255,255,255,.055)!important;
 }}
-[data-testid="stChatInput"]{{border-color:{theme["accent"]}!important;background:linear-gradient(125deg,{theme["accent"]} 0%,{theme["deep"]} 32%,#1b0e16 67%,#08080b 100%)!important;}}
-[data-testid="stChatInput"]:focus-within{{border-color:{theme["bright"]}!important;box-shadow:0 0 0 1px {theme["accent"]},0 5px 24px rgba(0,0,0,.38)!important;}}
-[data-testid="stChatInput"] button{{background:{theme["accent"]}!important;color:{"#17121a" if st.session_state.get("ui_theme")=="White" else "#fff"}!important;}}
+ :root{{--jane-deep:{theme["deep"]};}}
+.st-key-jane_composer_shell{{border-color:{theme["accent"]}!important;background:linear-gradient(125deg,{theme["accent"]} 0%,{theme["deep"]} 34%,#26111c 68%,{theme["accent"]} 100%)!important;}}
+.st-key-jane_composer_inner{{background:#0d0b10!important;}}
+.st-key-jane_composer_inner [data-testid="stPopover"]>button,
+.st-key-jane_composer_inner [data-testid="stFormSubmitButton"] button{{background:{theme["accent"]}!important;border-color:{theme["accent"]}!important;color:{"#17121a" if st.session_state.get("ui_theme")=="White" else "#fff"}!important;}}
 .stButton>button:hover{{border-color:{theme["accent"]}!important;}}
 h1,h2,h3{{color:{theme["accent"]}!important;}}
 .jane-login-title,.jane-card-icon{{color:{theme["accent"]}!important;text-shadow:0 0 8px {theme["accent"]},0 0 24px rgba({theme["glow"]},.65)!important;}}
@@ -1572,28 +1660,74 @@ image_mode = st.selectbox(
 )
 if image_mode == "Generate image":
     st.caption("Free community-powered generation. Anonymous prompts may be shared for dataset improvement and are processed by volunteer computers; avoid private or sensitive information.")
-with st.popover("＋", help="Attach files for J.A.N.E. to read"):
-    st.markdown("**Attach files to this conversation**")
-    plus_uploads = st.file_uploader(
-        "Choose files",
-        type=["txt", "md", "json", "csv", "xlsx", "pdf", "docx", "png", "jpg", "jpeg", "webp"],
-        accept_multiple_files=True,
-        key="jane_plus_file_uploader",
-        help="Supported: PDF, Word, Excel, CSV, text, JSON, Markdown and images. Files stay in this session.",
-    )
-    if plus_uploads:
-        for file in plus_uploads:
-            st.session_state.uploaded_files[file.name] = {
-                "name": file.name,
-                "data": file.getvalue(),
-                "type": file.type,
-                "size": file.size,
-            }
-        st.caption(f"{len(plus_uploads)} file(s) attached. Ask J.A.N.E. about them in your next message.")
-    if st.session_state.uploaded_files:
-        st.caption("Currently attached: " + ", ".join(st.session_state.uploaded_files.keys()))
+with st.container(key="jane_composer_shell"):
+    with st.container(key="jane_composer_inner"):
+        plus_col, message_col = st.columns([0.07, 0.93], gap="small")
+        with plus_col:
+            with st.popover("＋", help="Attach files for J.A.N.E. to read"):
+                st.markdown("**Add to your message**")
+                st.caption("Choose files for J.A.N.E. to read")
+                plus_uploads = st.file_uploader(
+                    "Upload files",
+                    type=["txt", "md", "json", "csv", "xlsx", "pdf", "docx", "png", "jpg", "jpeg", "webp"],
+                    accept_multiple_files=True,
+                    key="jane_plus_file_uploader",
+                    help="Supported: PDF, Word, Excel, CSV, text, JSON, Markdown and images. Files stay in this session.",
+                    label_visibility="collapsed",
+                )
+                if plus_uploads:
+                    for file in plus_uploads:
+                        st.session_state.uploaded_files[file.name] = {
+                            "name": file.name,
+                            "data": file.getvalue(),
+                            "type": file.type,
+                            "size": file.size,
+                        }
+                    st.caption(f"{len(plus_uploads)} file(s) attached. Ask J.A.N.E. about them in your next message.")
+                if st.session_state.uploaded_files:
+                    st.caption("Attached: " + ", ".join(st.session_state.uploaded_files.keys()))
+        with message_col:
+            with st.form("jane_composer_form", clear_on_submit=True):
+                text_col, send_col = st.columns([0.91, 0.09], gap="small")
+                with text_col:
+                    composer_text = st.text_area(
+                        "Message J.A.N.E.",
+                        placeholder="Describe an image…" if image_mode == "Generate image" else "Message J.A.N.E.",
+                        height=74,
+                        key="jane_composer_text",
+                        label_visibility="collapsed",
+                    )
+                with send_col:
+                    composer_submitted = st.form_submit_button("↑", use_container_width=True)
 
-submitted_prompt = st.chat_input("Describe an image…" if image_mode == "Generate image" else "Message J.A.N.E....", key="jane_chat_input")
+
+components.html('''<script>
+(() => {
+  const doc = window.parent.document;
+  function positionComposerPopover() {
+    const shell = doc.querySelector('.st-key-jane_composer_shell');
+    const popovers = doc.querySelectorAll('[data-baseweb="popover"]');
+    if (!shell || !popovers.length) return;
+    const rect = shell.getBoundingClientRect();
+    popovers.forEach(p => {
+      if (p.querySelector('.st-key-jane_plus_file_uploader')) {
+        p.style.position = 'fixed';
+        p.style.top = 'auto';
+        p.style.bottom = (window.parent.innerHeight - rect.top + 10) + 'px';
+        p.style.left = Math.max(12, rect.left + 8) + 'px';
+        p.style.transform = 'none';
+        p.style.zIndex = '10035';
+      }
+    });
+  }
+  const observer = new MutationObserver(positionComposerPopover);
+  observer.observe(doc.body, { childList: true, subtree: true, attributes: true });
+  window.parent.addEventListener('resize', positionComposerPopover);
+  positionComposerPopover();
+})();
+</script>''', height=0, scrolling=False)
+
+submitted_prompt = composer_text if composer_submitted else None
 prompt = submitted_prompt.strip() if submitted_prompt else None
 if st.session_state.pending_prompt:
     prompt = st.session_state.pending_prompt; st.session_state.pending_prompt = None
