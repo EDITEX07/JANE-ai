@@ -302,19 +302,29 @@ def image_dimensions_for_ratio(ratio, longest_side):
 st.set_page_config(page_title="J.A.N.E. | AI Workspace", page_icon="app-logo.png", layout="wide", initial_sidebar_state="collapsed")
 
 # -------------------- FILE RECOGNITION --------------------
+TEXT_LIKE_EXTENSIONS = {
+    ".txt", ".md", ".markdown", ".json", ".jsonl", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf", ".env",
+    ".xml", ".html", ".htm", ".css", ".scss", ".less", ".svg", ".sql", ".log", ".rtf", ".tex", ".bib",
+    ".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".c", ".cpp", ".cc", ".h", ".hpp", ".cs", ".go", ".rs",
+    ".rb", ".php", ".swift", ".kt", ".kts", ".scala", ".r", ".m", ".pl", ".lua", ".dart", ".sh", ".bash",
+    ".zsh", ".ps1", ".bat", ".cmd", ".dockerfile", ".gitignore", ".gitattributes",
+}
+
+
 def extract_uploaded_file_text(filename, file_info):
-    """Extract readable text from supported uploads for the active chat request."""
+    """Extract readable text or multimodal summary from any uploaded file type."""
     data = file_info.get("data", b"")
     extension = Path(filename).suffix.lower()
     if not data:
         return ""
     try:
-        if extension in (".txt", ".md", ".json"):
+        if extension in TEXT_LIKE_EXTENSIONS or filename.lower() in ("dockerfile", "makefile", "readme", "license"):
             return data.decode("utf-8-sig", errors="replace")[:30000]
-        if extension == ".csv":
-            frame = pd.read_csv(io.BytesIO(data), nrows=300)
+        if extension in (".csv", ".tsv"):
+            sep = "\t" if extension == ".tsv" else ","
+            frame = pd.read_csv(io.BytesIO(data), sep=sep, nrows=300)
             return frame.to_string(index=False, max_rows=300, max_cols=40)[:30000]
-        if extension == ".xlsx":
+        if extension in (".xlsx", ".xls", ".ods"):
             frame = pd.read_excel(io.BytesIO(data), nrows=300)
             return frame.to_string(index=False, max_rows=300, max_cols=40)[:30000]
         if extension == ".pdf":
@@ -337,10 +347,41 @@ def extract_uploaded_file_text(filename, file_info):
                 for row in table.rows[:100]:
                     paragraphs.append(" | ".join(cell.text.replace("\n", " ") for cell in row.cells))
             return "\n".join(paragraphs)[:30000]
-        if extension in (".png", ".jpg", ".jpeg", ".webp"):
+        if extension == ".pptx":
+            try:
+                from pptx import Presentation
+            except ImportError:
+                return "PowerPoint reading needs the python-pptx package. Add python-pptx to requirements.txt and redeploy."
+            prs = Presentation(io.BytesIO(data))
+            slides_text = []
+            for idx, slide in enumerate(prs.slides[:50], start=1):
+                parts = [shape.text.strip() for shape in slide.shapes if hasattr(shape, "text") and shape.text.strip()]
+                if parts:
+                    slides_text.append(f"[Slide {idx}]\n" + "\n".join(parts))
+            return "\n\n".join(slides_text)[:30000] or "No selectable text found in presentation."
+        if extension == ".zip":
+            import zipfile
+            if zipfile.is_zipfile(io.BytesIO(data)):
+                with zipfile.ZipFile(io.BytesIO(data)) as zf:
+                    names = zf.namelist()[:100]
+                    snippets = [f"ZIP archive contents ({len(zf.namelist())} files): " + ", ".join(names)]
+                    for member in names[:10]:
+                        if member.endswith("/"):
+                            continue
+                        if Path(member).suffix.lower() in TEXT_LIKE_EXTENSIONS or Path(member).suffix.lower() == ".csv":
+                            try:
+                                content = zf.read(member).decode("utf-8-sig", errors="replace")[:3000]
+                                snippets.append(f"--- {member} ---\n{content}")
+                            except Exception:
+                                pass
+                    return "\n\n".join(snippets)[:30000]
+        if extension in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"):
             client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-            mime_type = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}[extension]
-            part = types.Part.from_bytes(data=data, mime_type=mime_type)
+            mime_map = {
+                ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".webp": "image/webp", ".gif": "image/gif", ".bmp": "image/bmp",
+            }
+            part = types.Part.from_bytes(data=data, mime_type=mime_map[extension])
             response = client.models.generate_content(
                 model="gemini-3.5-flash-lite",
                 contents=[
@@ -349,7 +390,33 @@ def extract_uploaded_file_text(filename, file_info):
                 ],
             )
             return (response.text or "No readable information was returned for this image.")[:20000]
-        return f"J.A.N.E. does not recognize the {extension or 'unknown'} file format yet."
+        if extension in (".mp3", ".wav", ".ogg", ".m4a", ".flac", ".aac", ".mp4", ".webm", ".mov"):
+            media_mimes = {
+                ".mp3": "audio/mp3", ".wav": "audio/wav", ".ogg": "audio/ogg",
+                ".m4a": "audio/mp4", ".flac": "audio/flac", ".aac": "audio/aac",
+                ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
+            }
+            if len(data) <= 18 * 1024 * 1024:
+                client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+                part = types.Part.from_bytes(data=data, mime_type=media_mimes[extension])
+                response = client.models.generate_content(
+                    model="gemini-3.5-flash-lite",
+                    contents=[
+                        "Transcribe or summarize the spoken words, sounds, and visual content of this uploaded media file accurately.",
+                        part,
+                    ],
+                )
+                return (response.text or f"Uploaded media file: {filename} ({len(data)} bytes).")[:20000]
+            return f"Uploaded media file: {filename} ({len(data)} bytes). File exceeds inline 18 MB preview limit."
+
+        # Universal fallback: inspect whether the unknown file is valid UTF-8/UTF-16 text or binary
+        sample = data[:4096]
+        if b"\x00" not in sample:
+            decoded = data.decode("utf-8-sig", errors="strict")
+            return decoded[:30000]
+        return f"Uploaded binary file '{filename}' (extension: {extension or 'none'}, size: {len(data):,} bytes). Attached in session."
+    except UnicodeDecodeError:
+        return f"Uploaded binary file '{filename}' (extension: {extension or 'none'}, size: {len(data):,} bytes). Attached in session."
     except Exception as exc:
         return f"J.A.N.E. could not read this file ({type(exc).__name__}). Please check that it is not damaged or password-protected."
 
@@ -962,16 +1029,285 @@ def _decode_firestore_value(value):
     return None
 
 
+# -------------------- IN-CHAT FILE GENERATION --------------------
+SUPPORTED_OUTPUT_FORMATS = {
+    "pdf": ("pdf", "application/pdf"),
+    "docx": ("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+    "xlsx": ("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+    "csv": ("csv", "text/csv"),
+    "md": ("md", "text/markdown"),
+    "json": ("json", "application/json"),
+    "txt": ("txt", "text/plain"),
+}
+
+
+def _sanitize_output_filename(raw_name, ext):
+    base = Path(str(raw_name or "jane_document")).stem
+    cleaned = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in base).strip("_")
+    cleaned = cleaned[:60] or "jane_document"
+    return f"{cleaned}.{ext}"
+
+
+def _extract_json_block(text):
+    raw = str(text or "").strip()
+    if raw.startswith("```"):
+        lines = raw.splitlines()
+        if len(lines) >= 3:
+            raw = "\n".join(lines[1:-1]).strip()
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        raw = raw[start : end + 1]
+    return json.loads(raw)
+
+
+def _detect_file_creation_request(prompt):
+    """Detect if the user is asking J.A.N.E. in normal chat to create/export a downloadable file."""
+    text = str(prompt or "").strip()
+    lowered = text.lower()
+    if not lowered:
+        return None
+
+    import re
+
+    # Explicit extension mention paired with creation/export intent
+    creation_verbs = (
+        "create", "generate", "make", "build", "write", "export", "save",
+        "prepare", "draft", "compile", "turn this into", "put this in",
+        "put it in", "convert to", "give me a", "give me an", "send me a",
+        "downloadable", "as a file", "in a file", "into a file",
+    )
+    has_creation_intent = any(v in lowered for v in creation_verbs)
+
+    ext_patterns = [
+        ("xlsx", r"\b(?:xlsx|excel(?:\s+(?:file|sheet|spreadsheet|workbook))?|spreadsheet)\b"),
+        ("csv", r"\b(?:csv(?:\s+file)?)\b"),
+        ("docx", r"\b(?:docx|word(?:\s+(?:file|doc|document))?)\b"),
+        ("pdf", r"\b(?:pdf(?:\s+(?:file|document|report))?)\b"),
+        ("json", r"\b(?:json(?:\s+file)?)\b"),
+        ("md", r"\b(?:markdown|\.md|md\s+file|readme(?:\.md)?)\b"),
+        ("txt", r"\b(?:\.txt|text\s+file|txt\s+file|plain\s+text\s+file)\b"),
+    ]
+
+    detected_ext = None
+    for ext, pat in ext_patterns:
+        if re.search(pat, lowered):
+            detected_ext = ext
+            break
+
+    # Also match generic "create a file / make a downloadable file" without a specific extension -> default to pdf
+    generic_file_phrase = bool(
+        re.search(r"\b(?:create|generate|make|build|export|save|prepare|draft)\s+(?:a\s+|an\s+|the\s+)?(?:new\s+)?(?:downloadable\s+)?file\b", lowered)
+        or re.search(r"\b(?:as|into|in)\s+(?:a\s+)?(?:downloadable\s+)?file\b", lowered)
+    )
+
+    # Avoid false positives when the user is just asking a question *about* files/formats
+    question_only = lowered.startswith(("what is ", "what are ", "how do i ", "how to ", "why does ", "can you explain ", "explain "))
+    if question_only and not generic_file_phrase and not re.search(r"\b(?:create|generate|export|save|make)\b", lowered):
+        return None
+
+    if detected_ext and has_creation_intent:
+        return detected_ext
+    if generic_file_phrase:
+        return "pdf"
+    return None
+
+
+def _build_pdf_bytes(title, sections):
+    try:
+        from reportlab.lib.pagesizes import LETTER
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+        from xml.sax.saxutils import escape
+
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=LETTER, title=title)
+        styles = getSampleStyleSheet()
+        story = [Paragraph(escape(title), styles["Title"]), Spacer(1, 14)]
+        for sec in sections:
+            heading = str(sec.get("heading", "")).strip()
+            body = str(sec.get("body", "")).strip()
+            if heading:
+                story.append(Paragraph(escape(heading), styles["Heading2"]))
+                story.append(Spacer(1, 6))
+            for para in body.split("\n\n"):
+                if para.strip():
+                    story.append(Paragraph(escape(para.strip()).replace("\n", "<br/>"), styles["BodyText"]))
+                    story.append(Spacer(1, 8))
+        doc.build(story)
+        return buf.getvalue()
+    except ImportError:
+        lines = [title, "=" * len(title), ""]
+        for sec in sections:
+            if sec.get("heading"):
+                lines.append(str(sec["heading"]))
+            if sec.get("body"):
+                lines.append(str(sec["body"]))
+            lines.append("")
+        plain = "\n".join(lines).encode("latin-1", errors="replace").decode("latin-1")
+        escaped = plain.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+        text_ops = ["BT", "/F1 11 Tf", "50 740 Td", "14 TL"]
+        for line in escaped.splitlines()[:48]:
+            text_ops.append(f"({line[:95]}) Tj T*")
+        text_ops.append("ET")
+        stream = "\n".join(text_ops).encode("latin-1")
+        objs = [
+            b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
+            b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n",
+            b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n",
+            f"4 0 obj << /Length {len(stream)} >> stream\n".encode("latin-1") + stream + b"\nendstream endobj\n",
+            b"5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n",
+        ]
+        out = io.BytesIO()
+        out.write(b"%PDF-1.4\n")
+        offsets = [0]
+        for obj in objs:
+            offsets.append(out.tell())
+            out.write(obj)
+        xref_pos = out.tell()
+        out.write(f"xref\n0 {len(offsets)}\n0000000000 65535 f \n".encode("latin-1"))
+        for off in offsets[1:]:
+            out.write(f"{off:010d} 00000 n \n".encode("latin-1"))
+        out.write(f"trailer << /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF".encode("latin-1"))
+        return out.getvalue()
+
+
+def _build_docx_bytes(title, sections):
+    from docx import Document
+
+    doc = Document()
+    doc.add_heading(title, level=0)
+    for sec in sections:
+        heading = str(sec.get("heading", "")).strip()
+        body = str(sec.get("body", "")).strip()
+        if heading:
+            doc.add_heading(heading, level=1)
+        if body:
+            for para in body.split("\n\n"):
+                if para.strip():
+                    doc.add_paragraph(para.strip())
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def _build_tabular_bytes(ext, columns, rows):
+    df = pd.DataFrame(rows, columns=columns if columns else None)
+    if ext == "csv":
+        return df.to_csv(index=False).encode("utf-8")
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Sheet1")
+    return buf.getvalue()
+
+
+def jane_generate_file(prompt, target_ext, recent_messages=None, attached_context=""):
+    """Generate a downloadable file directly from normal chat using Gemini (with OpenAI fallback)."""
+    ext, mime = SUPPORTED_OUTPUT_FORMATS.get(target_ext, SUPPORTED_OUTPUT_FORMATS["pdf"])
+    is_tabular = ext in ("csv", "xlsx")
+
+    schema_hint = (
+        '{"filename": "descriptive_name", "summary": "Brief natural confirmation message", '
+        '"columns": ["Col1", "Col2"], "rows": [["val1", "val2"]]}'
+        if is_tabular
+        else '{"filename": "descriptive_name", "summary": "Brief natural confirmation message", '
+        '"title": "Document Title", "sections": [{"heading": "Section 1", "body": "Detailed content..."}], '
+        '"raw_json": {}}'
+    )
+    instruction = (
+        f"You are J.A.N.E., generating a downloadable .{ext} file inside the conversation. "
+        "Use any relevant conversation history and attached reference files if the user refers to earlier messages "
+        "(such as 'put that in a PDF' or 'export this to Excel'). "
+        "Return ONLY valid JSON matching this exact schema (no markdown fences):\n"
+        f"{schema_hint}"
+    )
+
+    context_parts = []
+    if recent_messages:
+        convo_lines = []
+        for item in recent_messages[-10:]:
+            role_label = "User" if item.get("role") == "user" else "J.A.N.E."
+            content_text = str(item.get("content", "")).strip()
+            if content_text:
+                convo_lines.append(f"{role_label}: {content_text}")
+        if convo_lines:
+            context_parts.append("Recent conversation context:\n" + "\n".join(convo_lines))
+    if attached_context:
+        context_parts.append("Attached reference files:\n" + attached_context)
+    context_parts.append(f"Current request: {prompt}")
+    user_payload = "\n\n".join(context_parts)
+
+    raw_response = ""
+    try:
+        client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+        resp = client.models.generate_content(
+            model=st.secrets.get("GEMINI_MODEL", "gemini-2.5-flash"),
+            contents=[instruction, user_payload],
+        )
+        raw_response = resp.text or ""
+    except Exception:
+        openai_key = _jane_secret("OPENAI_API_KEY")
+        if not openai_key:
+            raise
+        openai_client = OpenAI(api_key=openai_key)
+        resp = openai_client.responses.create(
+            model=st.secrets.get("OPENAI_MODEL", "gpt-4.1-mini"),
+            instructions=instruction,
+            input=user_payload,
+        )
+        raw_response = resp.output_text or ""
+
+    spec = _extract_json_block(raw_response)
+    filename = _sanitize_output_filename(spec.get("filename", "jane_document"), ext)
+    summary = str(spec.get("summary") or f"Here is your `{filename}` file. You can download it below.").strip()
+    title = str(spec.get("title") or Path(filename).stem.replace("_", " ").title()).strip()
+    sections = spec.get("sections") or [{"heading": "", "body": raw_response}]
+
+    if ext == "pdf":
+        file_bytes = _build_pdf_bytes(title, sections)
+    elif ext == "docx":
+        file_bytes = _build_docx_bytes(title, sections)
+    elif ext in ("csv", "xlsx"):
+        file_bytes = _build_tabular_bytes(ext, spec.get("columns", []), spec.get("rows", []))
+    elif ext == "json":
+        payload = spec.get("raw_json") if spec.get("raw_json") else {"title": title, "sections": sections}
+        file_bytes = json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
+    elif ext == "md":
+        md_parts = [f"# {title}\n"]
+        for sec in sections:
+            if sec.get("heading"):
+                md_parts.append(f"## {sec['heading']}\n")
+            if sec.get("body"):
+                md_parts.append(f"{sec['body']}\n")
+        file_bytes = "\n".join(md_parts).encode("utf-8")
+    else:
+        txt_parts = [title, "=" * len(title), ""]
+        for sec in sections:
+            if sec.get("heading"):
+                txt_parts.append(str(sec["heading"]))
+            if sec.get("body"):
+                txt_parts.append(str(sec["body"]))
+            txt_parts.append("")
+        file_bytes = "\n".join(txt_parts).encode("utf-8")
+
+    return {
+        "bytes": file_bytes,
+        "filename": filename,
+        "mime": mime,
+        "summary": summary,
+    }
+
+
 def save_chat_history(chat_id, chat_data):
     """Persist a user's conversation as a JSON string in their own Firestore chat document."""
     if not st.session_state.get("auth_user"):
         return False
     if not chat_id or "/" in str(chat_id) or ".." in str(chat_id):
         raise RuntimeError("Invalid chat ID.")
-    # Binary image data and uploaded file bytes are deliberately not stored in chat history.
+    # Binary image data and uploaded/generated file bytes are deliberately not stored in chat history.
     safe_messages = []
     for message in chat_data.get("messages", []):
-        safe = {k: v for k, v in message.items() if k not in ("image_bytes",)}
+        safe = {k: v for k, v in message.items() if k not in ("image_bytes", "file_bytes")}
         if isinstance(safe.get("attachments"), list):
             safe["attachments"] = [str(name) for name in safe["attachments"]]
         safe_messages.append(safe)
@@ -1367,7 +1703,7 @@ with st.sidebar:
         if st.button(label, key=f"select_chat_{chat_id}", use_container_width=True):
             st.session_state.current_chat = chat_id; st.rerun()
     st.divider(); st.markdown("### 📎 Documents & attachments")
-    uploaded = st.file_uploader("Attach files", type=["txt", "csv", "xlsx", "pdf", "docx", "json", "md", "png", "jpg", "jpeg", "webp"], accept_multiple_files=True, help="Files remain in the current app session and are not permanently stored.")
+    uploaded = st.file_uploader("Attach files", type=None, accept_multiple_files=True, help="Upload any file type or extension. Files remain in the current app session and are not permanently stored.")
     if uploaded:
         for file in uploaded:
             st.session_state.uploaded_files[file.name] = {"name": file.name, "data": file.getvalue(), "type": file.type, "size": file.size}
@@ -1663,6 +1999,14 @@ for message_index, message in enumerate(chat["messages"]):
                 st.image(str(saved_image_path), caption="Image provided by J.A.N.E.", use_container_width=True)
             else:
                 st.caption(f"Image file is missing from the app repository: {message['image_file']}")
+        if message.get("file_bytes"):
+            st.download_button(
+                f"⬇ Download {message.get('file_name', 'file')}",
+                data=message["file_bytes"],
+                file_name=message.get("file_name", "jane_document.pdf"),
+                mime=message.get("file_mime", "application/octet-stream"),
+                key=f"download_file_{message_index}",
+            )
         if message["role"] == "assistant" and not message.get("image_bytes") and not message.get("image_file") and not message.get("image_url"):
             render_copy_answer(message["content"], f"history-{message_index}")
             render_speak_controls(message["content"], f"history-{message_index}")
@@ -1699,10 +2043,10 @@ with st.container(key="jane_composer_shell"):
             st.caption("Choose files for J.A.N.E. to read")
             plus_uploads = st.file_uploader(
                 "Upload files",
-                type=["txt", "md", "json", "csv", "xlsx", "pdf", "docx", "png", "jpg", "jpeg", "webp"],
+                type=None,
                 accept_multiple_files=True,
                 key="jane_plus_file_uploader",
-                help="Supported: PDF, Word, Excel, CSV, text, JSON, Markdown and images. Files stay in this session.",
+                help="All file types and extensions are supported. Files stay in this session.",
                 label_visibility="collapsed",
             )
             if plus_uploads:
@@ -1866,12 +2210,23 @@ if prompt:
         render_message_content({"role": "user", "content": prompt})
         if attachment_names: st.caption("📎 " + ", ".join(attachment_names))
     generated_image_bytes = None
+    generated_file = None
+    detected_file_ext = None if image_mode == "Generate image" else _detect_file_creation_request(prompt)
     if st.session_state.api_enabled:
         try:
             if image_mode == "Generate image":
                 with st.spinner("J.A.N.E. is generating with its best available image engine..."):
                     generated_image_bytes = jane_generate_image(prompt, width=512, height=512)
                 answer = "Here is your image. You can download it below."
+            elif detected_file_ext:
+                with st.spinner(f"J.A.N.E. is creating your .{detected_file_ext} file..."):
+                    generated_file = jane_generate_file(
+                        prompt,
+                        detected_file_ext,
+                        recent_messages=chat["messages"][:-1],
+                        attached_context=build_attached_file_context(),
+                    )
+                answer = generated_file["summary"]
             else:
                 client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
                 mode_instructions = {
@@ -2030,6 +2385,10 @@ if prompt:
     if generated_image_bytes:
         assistant_message["image_bytes"] = generated_image_bytes
         assistant_message["image_filename"] = "jane_generated_image.png"
+    if generated_file:
+        assistant_message["file_bytes"] = generated_file["bytes"]
+        assistant_message["file_name"] = generated_file["filename"]
+        assistant_message["file_mime"] = generated_file["mime"]
     chat["messages"].append(assistant_message)
     # Persist full text conversation for signed-in users; Guest chat history stays session-only.
     if st.session_state.get("auth_user"):
@@ -2055,6 +2414,15 @@ if prompt:
             if st.session_state.get("last_image_engine") == "AI Horde fallback":
                 st.info(st.session_state.get("last_image_engine_note", "AI Horde was used as a fallback."))
             st.download_button("⬇ Download image", data=generated_image_bytes, file_name="jane_generated_image.png", mime="image/png", key=f"download_latest_image_{len(chat['messages'])}")
+        elif generated_file:
+            st.download_button(
+                f"⬇ Download {generated_file['filename']}",
+                data=generated_file["bytes"],
+                file_name=generated_file["filename"],
+                mime=generated_file["mime"],
+                key=f"download_latest_file_{len(chat['messages'])}",
+            )
+            render_copy_answer(answer, f"latest-{len(chat['messages'])}")
         else:
             render_copy_answer(answer, f"latest-{len(chat['messages'])}")
             render_speak_controls(answer, f"latest-{len(chat['messages'])}")
