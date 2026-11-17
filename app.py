@@ -558,7 +558,6 @@ def intelligence_dialog():
     st.caption("Your choice stays active until you change it.")
 
 
-
 @st.dialog("Choose assistant style")
 def assistant_style_dialog():
     st.caption("Choose how J.A.N.E. speaks to you.")
@@ -580,6 +579,7 @@ def assistant_style_dialog():
                     st.session_state.assistant_style = name
                     st.rerun()
     st.caption("This changes J.A.N.E.'s response style, not its intelligence mode.")
+
 
 def render_message_content(message):
     content = message.get("content", "")
@@ -630,6 +630,7 @@ def render_speak_controls(content, key):
  stop.addEventListener("click",()=>{{if("speechSynthesis" in window)window.speechSynthesis.cancel();}});
 }})();
 </script>''', height=52, scrolling=False)
+
 
 # -------------------- STYLING --------------------
 st.markdown(r'''<style>
@@ -891,6 +892,7 @@ h1,h2,h3{{color:{theme["accent"]}!important;}}
 .jane-login-foot:before,.jane-login-foot:after{{background:linear-gradient(90deg,transparent,{theme["accent"]})!important;}}
 </style>''', unsafe_allow_html=True)
 
+
 # -------------------- FIREBASE AUTHENTICATION --------------------
 def firebase_auth_request(endpoint, email, password):
     # Firebase Authentication REST API helper; API key stays in Streamlit Secrets.
@@ -1070,7 +1072,6 @@ def _detect_file_creation_request(prompt):
 
     import re
 
-    # Explicit extension mention paired with creation/export intent
     creation_verbs = (
         "create", "generate", "make", "build", "write", "export", "save",
         "prepare", "draft", "compile", "turn this into", "put this in",
@@ -1095,13 +1096,11 @@ def _detect_file_creation_request(prompt):
             detected_ext = ext
             break
 
-    # Also match generic "create a file / make a downloadable file" without a specific extension -> default to pdf
     generic_file_phrase = bool(
         re.search(r"\b(?:create|generate|make|build|export|save|prepare|draft)\s+(?:a\s+|an\s+|the\s+)?(?:new\s+)?(?:downloadable\s+)?file\b", lowered)
         or re.search(r"\b(?:as|into|in)\s+(?:a\s+)?(?:downloadable\s+)?file\b", lowered)
     )
 
-    # Avoid false positives when the user is just asking a question *about* files/formats
     question_only = lowered.startswith(("what is ", "what are ", "how do i ", "how to ", "why does ", "can you explain ", "explain "))
     if question_only and not generic_file_phrase and not re.search(r"\b(?:create|generate|export|save|make)\b", lowered):
         return None
@@ -1378,18 +1377,12 @@ def load_memories():
 
 
 def retrieve_relevant_memories(query, limit=5):
-    """Retrieve this signed-in user's most relevant saved facts for RAG context.
-
-    This first version uses local lexical matching, so it adds no new dependency
-    and does not send memory text to a separate embedding service. It is a
-    transparent baseline that can later be upgraded to semantic embeddings.
-    """
+    """Retrieve this signed-in user's most relevant saved facts for RAG context."""
     if not st.session_state.get("auth_user"):
         return []
     try:
         memories = load_memories()
     except Exception:
-        # Memory retrieval must never prevent the user from receiving an answer.
         return []
 
     import re
@@ -1399,6 +1392,7 @@ def retrieve_relevant_memories(query, limit=5):
         "into", "your", "you", "are", "was", "were", "how", "can", "please",
         "tell", "me", "does", "did", "use", "using", "want", "need", "remember",
     }
+
     def terms(value):
         return {
             token for token in re.findall(r"[a-zA-Z0-9_+#.-]{2,}", str(value).casefold())
@@ -1418,9 +1412,7 @@ def retrieve_relevant_memories(query, limit=5):
         overlap = query_terms & memory_terms
         if not overlap:
             continue
-        # Normalize overlap so longer memories do not win only due to length.
         score = len(overlap) / (len(query_terms) ** 0.5 * len(memory_terms) ** 0.35)
-        # Small boost for exact phrase matches.
         if str(query).casefold().strip() in memory_text.casefold():
             score += 0.5
         if score >= 0.12:
@@ -1444,7 +1436,6 @@ def save_memory(text, source="automatic"):
     text = " ".join(str(text or "").split()).strip()
     if not text or len(text) > 600:
         return False
-    # Do not save duplicates; compare normalized memory text.
     memories = load_memories()
     normalized = text.casefold().rstrip(".! ")
     for item in memories:
@@ -1472,7 +1463,6 @@ def extract_memories(user_text, assistant_text):
     """Use Gemini to extract a few durable, non-sensitive facts; never for Guest sessions."""
     if not st.session_state.get("auth_user"):
         return []
-    # Explicit remember commands are handled locally without an extraction call.
     try:
         client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
         instruction = (
@@ -1512,21 +1502,12 @@ if "auth_token" not in st.session_state:
     st.session_state.auth_token = None
 
 if st.session_state.get("auth_user"):
-    # A valid in-session Firebase identity always takes priority over the
-    # welcome/sign-in screen. Ordinary Streamlit reruns must never send an
-    # already authenticated user back to login.
     st.session_state.jane_entry_screen = "workspace"
-
-    # Recover an expired/missing short-lived ID token when the refresh token
-    # is still available in this Streamlit session. The refresh token remains
-    # server-side in st.session_state and is never written into browser HTML.
     if not st.session_state.get("auth_token") and st.session_state.get("auth_refresh_token"):
         try:
             _refresh_firebase_id_token()
             st.session_state.auth_session_error = ""
         except Exception as exc:
-            # Keep the workspace usable; show a clear message rather than
-            # silently redirecting the user to the login page.
             st.session_state.auth_session_error = str(exc)
 
     active_uid = st.session_state.auth_user.get("uid", "")
@@ -1534,7 +1515,6 @@ if st.session_state.get("auth_user"):
         try:
             saved_chats = load_chat_history()
             if saved_chats:
-                # Keep current in-session chats while merging the account's saved history.
                 saved_chats.update(st.session_state.chats)
                 st.session_state.chats = saved_chats
                 st.session_state.current_chat = next(reversed(saved_chats))
@@ -1545,26 +1525,26 @@ if st.session_state.get("auth_user"):
 
 if st.session_state.jane_entry_screen != "workspace":
     st.markdown(r'''<style>
-.block-container{max-width:900px!important;padding-top:.35rem!important;padding-bottom:2rem!important}
+.block-container{max-width:900px!important;padding-top:.35rem!important;padding-bottom:3.5rem!important}
 [data-testid="stSidebar"]{display:none!important}
-.jane-login-shell{position:relative;overflow:hidden;text-align:center;padding:10px 10px 24px;border-radius:26px;background:radial-gradient(ellipse at 50% 14%,rgba(109,13,35,.26),transparent 48%),linear-gradient(180deg,rgba(8,7,11,.65),rgba(9,8,12,.97));}
-.jane-portrait-frame{position:relative;width:min(100%,430px);margin:0 auto -6px;}
-.jane-portrait{width:100%;height:auto;max-height:380px;object-fit:contain;object-position:center;filter:drop-shadow(0 0 22px rgba(255,28,67,.25));animation:portraitFloat 5s ease-in-out infinite;mask-image:linear-gradient(to bottom,black 0%,black 75%,transparent 100%);}
-.jane-login-title{font-family:Orbitron,Inter,sans-serif;font-weight:900;letter-spacing:5px;font-size:clamp(42px,8vw,68px);line-height:1;color:#ff526b;text-shadow:0 0 8px #ff123e,0 0 24px rgba(255,22,62,.8);animation:loginGlow 3s ease-in-out infinite;margin:0}
-.jane-login-kicker{letter-spacing:4px;font-size:10px;color:#ff6378;text-transform:uppercase;margin:10px 0 28px}
+.jane-login-shell{position:relative;overflow:hidden;text-align:center;padding:12px 12px 32px;border-radius:26px;background:radial-gradient(ellipse at 50% 14%,rgba(109,13,35,.26),transparent 48%),linear-gradient(180deg,rgba(8,7,11,.65),rgba(9,8,12,.97));}
+.jane-login-title{font-family:Orbitron,Inter,sans-serif;font-weight:900;letter-spacing:5px;font-size:clamp(42px,8vw,68px);line-height:1;color:#ff526b;text-shadow:0 0 8px #ff123e,0 0 24px rgba(255,22,62,.8);animation:loginGlow 3s ease-in-out infinite;margin:4px 0 0}
+.jane-login-kicker{letter-spacing:4px;font-size:10px;color:#ff6378;text-transform:uppercase;margin:8px 0 22px}
 .jane-login-heading{font-size:clamp(25px,4vw,34px);font-weight:750;color:#f7f2f5;margin:0 0 8px}
 .jane-login-sub{font-size:15px;color:#aeb3c3;line-height:1.65;margin:0 auto 12px;max-width:560px}
-.jane-feature-rail{font-size:10px;letter-spacing:3px;color:#aaa8b7;text-align:center;margin:0 0 15px}.jane-feature-rail span{color:#ff465c}
-.jane-login-card{height:100%;min-height:255px;border:1px solid rgba(255,54,85,.8);border-radius:20px;padding:23px 18px 20px;background:linear-gradient(145deg,rgba(54,10,25,.7),rgba(13,11,17,.93));box-shadow:0 0 25px rgba(255,20,60,.12),inset 0 1px rgba(255,255,255,.04);text-align:center}
+.jane-feature-rail{font-size:10px;letter-spacing:3px;color:#aaa8b7;text-align:center;margin:0 0 12px}.jane-feature-rail span{color:#ff465c}
+.jane-login-card{height:100%;min-height:245px;border:1px solid rgba(255,54,85,.8);border-radius:20px;padding:23px 18px 20px;background:linear-gradient(145deg,rgba(54,10,25,.7),rgba(13,11,17,.93));box-shadow:0 0 25px rgba(255,20,60,.12),inset 0 1px rgba(255,255,255,.04);text-align:center}
 .jane-guest-card{border-color:rgba(125,133,153,.45);background:linear-gradient(145deg,rgba(19,20,27,.85),rgba(8,9,13,.96));box-shadow:none}
 .jane-card-icon{font-size:34px;color:#ff465c;margin:0 0 8px;text-shadow:0 0 12px rgba(255,20,60,.55)}.jane-card-title{font-size:21px;font-weight:650;color:#f8f5f8;margin:0 0 9px}.jane-card-copy{font-size:13px;color:#aeb3c3;line-height:1.6;min-height:44px;margin-bottom:15px}
-.jane-login-foot{display:flex;align-items:center;gap:14px;justify-content:center;color:#8e91a0;font-size:10px;letter-spacing:3px;margin:30px 0 4px}.jane-login-foot:before,.jane-login-foot:after{content:"";width:90px;height:1px;background:linear-gradient(90deg,transparent,#ff465c)}.jane-login-foot:after{transform:scaleX(-1)}
-@keyframes loginGlow{0%,100%{filter:drop-shadow(0 0 4px rgba(255,22,62,.45))}50%{filter:drop-shadow(0 0 15px rgba(255,22,62,.95))}}@keyframes portraitFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
-.stButton>button{min-height:48px;border-radius:999px!important;font-weight:600}@media(max-width:640px){.jane-login-shell{padding:4px 3px 18px}.jane-portrait-frame{width:min(100%,330px)}.jane-login-kicker{margin-bottom:22px}.jane-login-card{min-height:0;padding:20px 15px}.jane-card-copy{min-height:0}}@media(prefers-reduced-motion:reduce){.jane-portrait,.jane-login-title{animation:none!important}}
+.jane-login-foot{display:flex;align-items:center;gap:14px;justify-content:center;color:#8e91a0;font-size:10px;letter-spacing:3px;margin:26px 0 16px}.jane-login-foot:before,.jane-login-foot:after{content:"";width:90px;height:1px;background:linear-gradient(90deg,transparent,#ff465c)}.jane-login-foot:after{transform:scaleX(-1)}
+@keyframes loginGlow{0%,100%{filter:drop-shadow(0 0 4px rgba(255,22,62,.45))}50%{filter:drop-shadow(0 0 15px rgba(255,22,62,.95))}}
+.stButton>button{min-height:48px;border-radius:999px!important;font-weight:600}
+@media(max-width:640px){.jane-login-shell{padding:6px 6px 36px}.jane-login-card{min-height:0;padding:20px 15px}.jane-card-copy{min-height:0}}
+@media(prefers-reduced-motion:reduce){.jane-login-title{animation:none!important}}
 </style>''', unsafe_allow_html=True)
     st.markdown('<div class="jane-login-shell">', unsafe_allow_html=True)
     st.markdown('<div class="jane-feature-rail">CHAT &nbsp;&nbsp; ANALYZE &nbsp;&nbsp; CREATE &nbsp;&nbsp; REMEMBER &nbsp;&nbsp; <span>GROW</span></div>', unsafe_allow_html=True)
-    st.markdown('<div class="jane-portrait-frame"><img class="jane-portrait" src="data:image/jpeg;base64,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" alt="J.A.N.E. portrait"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="core-wrap" aria-label="Animated J.A.N.E. energy core" style="margin:10px auto 16px;"><div class="energy-core"><div class="core-dot"></div></div></div>', unsafe_allow_html=True)
     st.markdown('<h1 class="jane-login-title">J.A.N.E.</h1><div class="jane-login-kicker">YOUR AI COMPANION · VERSION 0.9</div>', unsafe_allow_html=True)
     if st.session_state.jane_entry_screen == "welcome":
         st.markdown('<div class="jane-login-heading">Welcome to <span style="color:#ff465c">J.A.N.E.</span></div><p class="jane-login-sub">Your thoughts. My intelligence. A better tomorrow.</p><p class="jane-login-sub">Sign in securely to use your personal workspace, or continue as a guest.</p>', unsafe_allow_html=True)
@@ -1610,6 +1590,7 @@ if st.session_state.jane_entry_screen != "workspace":
         st.caption("Google sign-in can be added after email authentication is verified.")
     st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
+
 
 # -------------------- SIDEBAR --------------------
 with st.sidebar:
@@ -1768,6 +1749,7 @@ with st.sidebar:
     if st.button("🗑️ Clear current conversation", use_container_width=True):
         active_chat()["messages"] = []; active_chat()["title"] = "New conversation"; st.rerun()
 
+
 # -------------------- MAIN WORKSPACE --------------------
 logo_path = Path(__file__).with_name("jane_logo_transparent_full.png")
 if logo_path.exists():
@@ -1777,7 +1759,6 @@ else:
     st.markdown('<div class="jane-title">J.A.N.E.</div><div class="jane-subtitle">Judicial · Analytical · Neuroresearch Engine</div>', unsafe_allow_html=True)
 st.markdown('<div class="core-wrap" aria-label="Animated J.A.N.E. energy core"><div class="energy-core"><div class="core-dot"></div></div></div>', unsafe_allow_html=True)
 
-# Main workspace navigation. The existing chat remains the default and is not rebuilt.
 workspace_view = st.radio(
     "Workspace",
     ["Chat", "Image Studio"],
@@ -1938,8 +1919,6 @@ if not chat["messages"]:
     else:
         st.markdown('<div class="jane-task-heading">Put J.A.N.E. to work</div><div class="jane-task-subtitle">Pick a task to get started</div>', unsafe_allow_html=True)
 
-    # Four suggestions per row. Cards are independently staggered so the
-    # rows keep moving continuously without a blank gap or a disappearing end.
     task_rails = [
         ("top", [
             "Start an investment plan",
@@ -1993,7 +1972,6 @@ for message_index, message in enumerate(chat["messages"]):
         elif message.get("image_url"):
             st.image(message["image_url"], caption="Image provided by J.A.N.E.", use_container_width=True)
         elif message.get("image_file"):
-            # Backward compatibility for older chat messages saved with a local filename.
             saved_image_path = Path(__file__).resolve().parent / message["image_file"]
             if saved_image_path.is_file():
                 st.image(str(saved_image_path), caption="Image provided by J.A.N.E.", use_container_width=True)
@@ -2093,6 +2071,7 @@ prompt = submitted_prompt.strip() if submitted_prompt else None
 if st.session_state.pending_prompt:
     prompt = st.session_state.pending_prompt; st.session_state.pending_prompt = None
 
+
 # -------------------- REDLINE CHAT LINK ROUTING --------------------
 def is_redline_link_request(user_prompt):
     """Recognize direct questions asking for the Redline Chat website/link."""
@@ -2102,7 +2081,6 @@ def is_redline_link_request(user_prompt):
     if not text or "redline" not in text:
         return False
 
-    # Catch common ways users ask for the official Redline Chat URL.
     link_terms = (
         "url", "link", "website", "web site", "site", "where can i get",
         "where do i get", "where to get", "how can i get", "open redline",
@@ -2153,7 +2131,6 @@ if prompt:
             st.session_state.chat_history_error = str(exc)
         st.rerun()
 
-    # Answer Redline Chat link questions deterministically, without relying on the AI model.
     if is_redline_link_request(prompt):
         chat = active_chat()
         mode = st.session_state.intelligence_mode
@@ -2174,7 +2151,6 @@ if prompt:
                 st.session_state.chat_history_error = str(exc)
         st.rerun()
 
-    # Display the requested image directly from the public GitHub main branch.
     requested_image_url = requested_special_image(prompt)
     if requested_image_url:
         chat = active_chat()
@@ -2244,8 +2220,6 @@ if prompt:
                     "that the app may use configured AI services; distinguish the model provider from J.A.N.E.'s project creator."
                 )
                 system_instruction = ("You are J.A.N.E. (Judicial Analytical and Neuroresearch Engine), a warm, composed, intelligent, naturally conversational assistant with understated wit. Sound like a person having a conversation, not a critic, therapist, interviewer, teacher, or essay writer. IMPORTANT CONVERSATION STYLE: Never announce or label the task type, response style, tone, or internal approach (for example, do not write labels such as “Task type,” “Conversational response style,” or “Natural, brief and composed”). Apply style guidance silently. Do not analyze, interpret, grade, or comment on the user's wording, greeting, personality, intelligence, emotions, or intentions unless they explicitly ask you to. Never turn a simple message like 'Hey', 'Hi', 'Okay', or 'Thanks' into an explanation of what that message means; respond naturally and briefly, e.g. 'Hey! What's up?' or 'Anytime.' Keep casual replies to one short sentence by default. Avoid patronizing praise, unsolicited life lessons, overdramatic observations, and phrases that make the user feel examined or judged. Match the user's tone without forced slang. For real questions, answer directly; provide deeper analysis, structured detail, or critique only when requested or genuinely useful. Be respectful, supportive without being condescending, and honest about uncertainty. Do not claim to be Patrick Jane or imitate any actor's exact voice. Never claim to have verified information or performed actions you have not completed. Only files attached in this session are included as reference material when the user asks about them. SPEED: Give the shortest complete answer that satisfies the request. For greetings, confirmations, and simple factual questions, answer in 1-3 sentences. Do not browse or add sources unless the user asks for current information, research, verification, or web search. Do not repeat the conversation or explain your process. " + creator_identity + " " + f"Active intelligence mode: {mode}. Mode instructions: {mode_instructions[mode]} " + ("ASSISTANT STYLE: Jarvis. Address the user as Sir when natural. Be disciplined, composed, concise, proactive, and mission-oriented; use polished formal language and brief status-style phrasing when useful. Do not overdo military jargon, bark orders, or sacrifice warmth, accuracy, or safety. Never claim systems/actions are running unless actually true." if st.session_state.assistant_style == "Jarvis" else "ASSISTANT STYLE: Classic. Use natural, friendly, conversational language."))
-                # RAG: retrieve only memories relevant to this prompt, scoped to the signed-in user.
-                # Memory text is untrusted user data, not instructions; the model must treat it as context only.
                 relevant_memories = retrieve_relevant_memories(prompt, limit=5)
                 if relevant_memories:
                     memory_context = "\n".join(f"- {item}" for item in relevant_memories)
@@ -2265,12 +2239,10 @@ if prompt:
                         + "\nUse this content to answer the user's questions about the attached files. "
                         "If a file could not be read, say so clearly rather than pretending to have read it."
                     )
-                # Send only recent context to the model for faster replies; full chat remains saved in session/Firestore.
                 for item in chat["messages"][-12:]:
                     speaker = "User" if item["role"] == "user" else "J.A.N.E."
                     conversation.append(f"{speaker}: {item['content']}")
                 conversation.append("J.A.N.E.:")
-                # Use web grounding only when the user clearly requests fresh/current research.
                 latest_user_text = str(prompt).lower()
                 web_triggers = ("search the web", "look up", "latest", "current", "today", "right now", "recent news", "verify online", "research online", "sources", "cite sources", "price today", "weather")
                 needs_web_search = any(term in latest_user_text for term in web_triggers)
@@ -2284,7 +2256,6 @@ if prompt:
                         config=request_config,
                     )
                 answer = result.text or "I didn't receive a text response. Please try again."
-                # Append source links when Gemini returns Google Search grounding metadata.
                 grounding = getattr(result, "grounding_metadata", None)
                 grounding_chunks = getattr(grounding, "grounding_chunks", None) if grounding else None
                 source_lines = []
@@ -2312,9 +2283,6 @@ if prompt:
                 "gemini_api_key", "secrets", "api key", "unauthorized", "401", "403"
             ))
 
-            # Only fall back for TEXT chat quota/rate-limit failures.
-            # Image generation is left on Gemini because OpenAI image generation
-            # requires a separate image API flow and should not be silently substituted.
             if is_quota_error and image_mode != "Generate image":
                 try:
                     openai_key = st.secrets.get("OPENAI_API_KEY", "")
@@ -2390,21 +2358,18 @@ if prompt:
         assistant_message["file_name"] = generated_file["filename"]
         assistant_message["file_mime"] = generated_file["mime"]
     chat["messages"].append(assistant_message)
-    # Persist full text conversation for signed-in users; Guest chat history stays session-only.
     if st.session_state.get("auth_user"):
         try:
             save_chat_history(st.session_state.current_chat, chat)
             st.session_state.chat_history_error = ""
         except Exception as exc:
             st.session_state.chat_history_error = str(exc)
-    # Signed-in users get automatic memory formation. Guest memory is deliberately disabled.
     if st.session_state.get("auth_user") and not generated_image_bytes:
         candidates = extract_memories(prompt, answer)
         for candidate in candidates:
             try:
                 save_memory(candidate, source="automatic")
             except Exception:
-                # A memory write must never break the chat response.
                 pass
     with st.chat_message("assistant", avatar="assistant"):
         st.markdown(answer)
