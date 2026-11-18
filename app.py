@@ -2736,6 +2736,8 @@ if prompt:
                         for item in chat["messages"][-12:]:
                             role = "user" if item.get("role") == "user" else "assistant"
                             history.append({"role": role, "content": item.get("content", "")})
+                        # Initialize the OpenAI client before using the fallback stream.
+                        openai_client = OpenAI(api_key=openai_key)
                         openai_stream = openai_client.responses.create(
                             model=st.secrets.get("OPENAI_MODEL", "gpt-4.1-mini"),
                             instructions=system_instruction,
