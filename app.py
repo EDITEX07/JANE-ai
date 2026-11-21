@@ -686,6 +686,85 @@ def render_jane_web_visuals(images, key="web-visuals"):
                     st.markdown(f"[Visit source page]({item['source_url']})")
 
 
+def _jane_extract_product_cards(content, web_images=None):
+    """Extract a structured, source-linked product list emitted by J.A.N.E."""
+    text = str(content or "")
+    match = re.search(r"```jane_products\s*\n(.*?)```", text, flags=re.IGNORECASE | re.DOTALL)
+    if not match:
+        # Accept a JSON-labelled block too, while keeping ordinary JSON in answers untouched.
+        match = re.search(r"```json\s*\n\s*(\{\s*\"jane_products\".*?\})\s*```", text, flags=re.IGNORECASE | re.DOTALL)
+    if not match:
+        return text, []
+    try:
+        payload = json.loads(match.group(1))
+        items = payload.get("products", payload.get("jane_products", [])) if isinstance(payload, dict) else payload
+        if not isinstance(items, list):
+            return text, []
+    except Exception:
+        return text, []
+
+    images = list(web_images or [])
+    cards, seen = [], set()
+    for item in items[:7]:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or item.get("title") or "").strip()[:140]
+        url = str(item.get("url") or item.get("product_url") or item.get("link") or "").strip()
+        if not name or not url.startswith(("https://", "http://")) or url in seen:
+            continue
+        seen.add(url)
+        price = str(item.get("price") or "Price not verified").strip()[:80]
+        reason = str(item.get("reason") or item.get("description") or "").strip()[:360]
+        source = str(item.get("source_url") or url).strip()
+        if not source.startswith(("https://", "http://")):
+            source = url
+        # Only attach an image when its grounded title/source has a meaningful name match.
+        name_tokens = {t for t in re.findall(r"[a-z0-9]{3,}", name.lower()) if t not in {"with", "for", "the", "and", "new", "best"}}
+        best_image, best_score = None, 0.0
+        for image in images:
+            image_text = " ".join((image.get("title", ""), image.get("domain", ""), image.get("source_url", ""))).lower()
+            image_tokens = set(re.findall(r"[a-z0-9]{3,}", image_text))
+            score = len(name_tokens & image_tokens) / max(1, len(name_tokens))
+            if score > best_score:
+                best_image, best_score = image, score
+        image_url = best_image.get("image_url") if best_image and best_score >= 0.34 else ""
+        image_source = best_image.get("source_url") if image_url else source
+        cards.append({
+            "name": name, "url": url, "price": price,
+            "reason": reason or "See the linked product page for specifications.",
+            "source_url": source, "image_url": image_url, "image_source": image_source,
+        })
+    if not cards:
+        return text, []
+    cleaned = (text[:match.start()] + text[match.end():]).strip()
+    return cleaned, cards
+
+
+def render_jane_product_cards(products, key="product-cards"):
+    """Render compact product cards with grounded images and direct source links."""
+    if not products:
+        return
+    st.markdown("**Product picks**")
+    for start in range(0, len(products), 2):
+        columns = st.columns(2)
+        for column, product in zip(columns, products[start:start + 2]):
+            with column:
+                with st.container(border=True):
+                    if product.get("image_url"):
+                        try:
+                            st.image(product["image_url"], use_container_width=True)
+                        except Exception:
+                            st.caption("Product image could not be loaded.")
+                    else:
+                        st.markdown("<div style='height:105px;display:flex;align-items:center;justify-content:center;background:#171217;border-radius:10px;color:#aaa'>No matching web image returned</div>", unsafe_allow_html=True)
+                    st.markdown(f"**{product['name']}**")
+                    st.markdown(f"**{product.get('price', 'Price not verified')}**")
+                    st.caption(product.get("reason", ""))
+                    st.markdown(f"[View product / source]({product['url']})")
+                    if product.get("image_source") and product.get("image_url"):
+                        st.caption(f"Image source: {product['image_source']}")
+
+
 def _jane_wants_auto_image(prompt):
     """Only auto-generate standalone pictures when the user clearly asks."""
     text = str(prompt or "").lower()
@@ -2515,6 +2594,8 @@ for message_index, message in enumerate(chat["messages"]):
             render_jane_diagram(message["diagram"], f"history-{message_index}")
         if message.get("web_images"):
             render_jane_web_visuals(message["web_images"], f"history-web-{message_index}")
+        if message.get("web_products"):
+            render_jane_product_cards(message["web_products"], f"history-products-{message_index}")
         if message.get("image_bytes"):
             st.image(message["image_bytes"], caption="Generated by J.A.N.E.", use_container_width=True)
             st.download_button("⬇ Download image", data=message["image_bytes"], file_name=message.get("image_filename", "jane_generated_image.png"), mime="image/png", key=f"download_image_{message_index}")
@@ -2782,7 +2863,7 @@ if prompt:
                     "If explicitly asked which underlying model or provider powers the current response, answer honestly "
                     "that the app may use configured AI services; distinguish the model provider from J.A.N.E.'s project creator."
                 )
-                system_instruction = ("You are J.A.N.E. (Judicial Analytical and Neuroresearch Engine), a warm, composed, intelligent, naturally conversational assistant with understated wit. Sound like a person having a conversation, not a critic, therapist, interviewer, teacher, or essay writer. IMPORTANT CONVERSATION STYLE: Never announce or label the task type, response style, tone, or internal approach (for example, do not write labels such as “Task type,” “Conversational response style,” or “Natural, brief and composed”). Apply style guidance silently. Do not analyze, interpret, grade, or comment on the user's wording, greeting, personality, intelligence, emotions, or intentions unless they explicitly ask you to. Never turn a simple message like 'Hey', 'Hi', 'Okay', or 'Thanks' into an explanation of what that message means; respond naturally and briefly, e.g. 'Hey! What's up?' or 'Anytime.' Keep casual replies to one short sentence by default. Avoid patronizing praise, unsolicited life lessons, overdramatic observations, and phrases that make the user feel examined or judged. Match the user's tone without forced slang. For real questions, answer directly and completely. Do not default to one item when the request naturally calls for several: provide a useful set of distinct relevant results, options, examples, causes, steps, or alternatives, with enough detail to compare them. For recommendations and lists, normally provide 3-7 strong relevant options when evidence supports that many; never pad with weak or unrelated results, and say when only one reliable result is available. Use concise headings, tables, examples, and numbered steps when useful. VISUAL OUTPUT: Use visuals when they materially improve the answer. For product recommendations, shopping comparisons, real-world objects, places, and requests to see what something looks like, use Google Search grounding to retrieve relevant real web images when available; the app will display returned image results as clickable source-linked visual cards. For product recommendations, normally give 3-7 distinct options in a comparison table or clearly separated compact product entries, including product name, verified price when available, one-line reason to consider it, and a direct source/product link. If a price cannot be verified, say “Price not verified” rather than guessing. Organize useful options so each item can be compared. Do not invent images, product photos, prices, source links, screenshots, or data. When a diagram materially clarifies a process, code architecture, algorithm, system, timeline, or relationship, include one valid Mermaid fenced block (prefer flowchart TD or sequenceDiagram) so the app can render it visually. Use Mermaid pie charts or flowcharts for simple visual summaries when appropriate; use clear comparison tables for product differences. For code requests, provide complete usable code as needed and add a compact flow diagram when it genuinely helps. Keep casual replies short. Be respectful, supportive without being condescending, and honest about uncertainty. Do not claim to be Patrick Jane or imitate any actor's exact voice. Never claim to have verified information or performed actions you have not completed. Only files attached in this session are included as reference material when the user asks about them. SPEED: Give the shortest complete answer that satisfies the request. For greetings, confirmations, and simple factual questions, answer in 1-3 sentences. Do not browse or add sources unless the user asks for current information, research, verification, or web search. Do not repeat the conversation or explain your process. " + creator_identity + " " + f"Active intelligence mode: {mode}. Mode instructions: {mode_instructions[mode]} " + ("ASSISTANT STYLE: Jarvis. Address the user as Sir when natural. Be disciplined, composed, concise, proactive, and mission-oriented; use polished formal language and brief status-style phrasing when useful. Do not overdo military jargon, bark orders, or sacrifice warmth, accuracy, or safety. Never claim systems/actions are running unless actually true." if st.session_state.assistant_style == "Jarvis" else "ASSISTANT STYLE: Classic. Use natural, friendly, conversational language."))
+                system_instruction = ("You are J.A.N.E. (Judicial Analytical and Neuroresearch Engine), a warm, composed, intelligent, naturally conversational assistant with understated wit. Sound like a person having a conversation, not a critic, therapist, interviewer, teacher, or essay writer. IMPORTANT CONVERSATION STYLE: Never announce or label the task type, response style, tone, or internal approach (for example, do not write labels such as “Task type,” “Conversational response style,” or “Natural, brief and composed”). Apply style guidance silently. Do not analyze, interpret, grade, or comment on the user's wording, greeting, personality, intelligence, emotions, or intentions unless they explicitly ask you to. Never turn a simple message like 'Hey', 'Hi', 'Okay', or 'Thanks' into an explanation of what that message means; respond naturally and briefly, e.g. 'Hey! What's up?' or 'Anytime.' Keep casual replies to one short sentence by default. Avoid patronizing praise, unsolicited life lessons, overdramatic observations, and phrases that make the user feel examined or judged. Match the user's tone without forced slang. For real questions, answer directly and completely. Do not default to one item when the request naturally calls for several: provide a useful set of distinct relevant results, options, examples, causes, steps, or alternatives, with enough detail to compare them. For recommendations and lists, normally provide 3-7 strong relevant options when evidence supports that many; never pad with weak or unrelated results, and say when only one reliable result is available. Use concise headings, tables, examples, and numbered steps when useful. VISUAL OUTPUT: Use visuals when they materially improve the answer. For product recommendations, shopping comparisons, real-world objects, places, and requests to see what something looks like, use Google Search grounding to retrieve relevant real web images when available; the app will display returned image results as clickable source-linked visual cards. For product recommendations and shopping requests, normally give 3-7 distinct options. In addition to a readable comparison table or concise entries, ALWAYS append a fenced block beginning ```jane_products and ending ``` containing valid JSON exactly in this shape: {\"products\":[{\"name\":\"exact product name\",\"price\":\"verified price or Price not verified\",\"reason\":\"short factual reason\",\"url\":\"direct product page URL from Google Search grounding\",\"source_url\":\"source URL supporting the details\"}]}. Include only products and URLs actually supported by Google Search grounding; do not invent or guess. If the search results do not support at least two products, include only the supported items. Do not put markdown fences inside the JSON. Prices must be verified from a source or be “Price not verified”. The app will turn this block into visual product cards and match only relevant grounded web images to the products. Do not invent image URLs, product photos, prices, source links, screenshots, or data. When a diagram materially clarifies a process, code architecture, algorithm, system, timeline, or relationship, include one valid Mermaid fenced block (prefer flowchart TD or sequenceDiagram) so the app can render it visually. Use Mermaid pie charts or flowcharts for simple visual summaries when appropriate; use clear comparison tables for product differences. For code requests, provide complete usable code as needed and add a compact flow diagram when it genuinely helps. Keep casual replies short. Be respectful, supportive without being condescending, and honest about uncertainty. Do not claim to be Patrick Jane or imitate any actor's exact voice. Never claim to have verified information or performed actions you have not completed. Only files attached in this session are included as reference material when the user asks about them. SPEED: Give the shortest complete answer that satisfies the request. For greetings, confirmations, and simple factual questions, answer in 1-3 sentences. Do not browse or add sources unless the user asks for current information, research, verification, or web search. Do not repeat the conversation or explain your process. " + creator_identity + " " + f"Active intelligence mode: {mode}. Mode instructions: {mode_instructions[mode]} " + ("ASSISTANT STYLE: Jarvis. Address the user as Sir when natural. Be disciplined, composed, concise, proactive, and mission-oriented; use polished formal language and brief status-style phrasing when useful. Do not overdo military jargon, bark orders, or sacrifice warmth, accuracy, or safety. Never claim systems/actions are running unless actually true." if st.session_state.assistant_style == "Jarvis" else "ASSISTANT STYLE: Classic. Use natural, friendly, conversational language."))
                 # RAG: retrieve only memories relevant to this prompt, scoped to the signed-in user.
                 # Memory text is untrusted user data, not instructions; the model must treat it as context only.
                 relevant_memories = retrieve_relevant_memories(prompt, limit=5)
@@ -2841,7 +2922,8 @@ if prompt:
                             yield piece
 
                 with st.chat_message("assistant", avatar="assistant"):
-                    answer = st.write_stream(_jane_text_stream(), cursor="▍")
+                    stream_answer_slot = st.empty()
+                    answer = stream_answer_slot.write_stream(_jane_text_stream(), cursor="▍")
                     if not answer:
                         answer = "I didn't receive a text response. Please try again."
                     source_slot = st.empty()
@@ -2853,6 +2935,9 @@ if prompt:
                 grounding = (getattr(result, "grounding_metadata", None) if result else None) or final_stream_chunk.get("grounding")
                 grounding_chunks = getattr(grounding, "grounding_chunks", None) if grounding else None
                 web_images = _jane_extract_web_images(grounding)
+                answer, web_products = _jane_extract_product_cards(answer, web_images)
+                # Replace the streamed raw JSON protocol block with the clean user-facing answer.
+                stream_answer_slot.markdown(answer)
                 source_lines = []
                 seen_source_urls = set()
                 for chunk in grounding_chunks or []:
@@ -2868,6 +2953,9 @@ if prompt:
                 if web_images:
                     with source_slot.container():
                         render_jane_web_visuals(web_images, f"streamed-web-{len(chat['messages'])}")
+                if web_products:
+                    with source_slot.container():
+                        render_jane_product_cards(web_products, f"streamed-products-{len(chat['messages'])}")
                 with copy_slot.container():
                     render_copy_answer(answer, f"streamed-{len(chat['messages'])}")
                 with speak_slot.container():
@@ -2978,6 +3066,8 @@ if prompt:
         assistant_message["diagram"] = generated_diagram
     if 'web_images' in locals() and web_images:
         assistant_message["web_images"] = web_images
+    if 'web_products' in locals() and web_products:
+        assistant_message["web_products"] = web_products
     if generated_image_bytes:
         assistant_message["image_bytes"] = generated_image_bytes
         assistant_message["image_filename"] = "jane_generated_image.png"
@@ -3009,6 +3099,8 @@ if prompt:
                 render_jane_diagram(generated_diagram, f"latest-{len(chat['messages'])}")
             if assistant_message.get("web_images"):
                 render_jane_web_visuals(assistant_message["web_images"], f"latest-web-{len(chat['messages'])}")
+            if assistant_message.get("web_products"):
+                render_jane_product_cards(assistant_message["web_products"], f"latest-products-{len(chat['messages'])}")
             if generated_image_bytes:
                 st.image(generated_image_bytes, caption="Generated by J.A.N.E.", use_container_width=True)
                 st.caption("Image engine: " + st.session_state.get("last_image_engine", "J.A.N.E."))
