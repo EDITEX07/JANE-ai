@@ -2499,18 +2499,7 @@ image_mode = st.selectbox(
 )
 if image_mode == "Generate image":
     st.caption("Free community-powered generation. Anonymous prompts may be shared for dataset improvement and are processed by volunteer computers; avoid private or sensitive information.")
-st.checkbox(
-    "Allow automatic image generation when I ask for a picture",
-    value=bool(st.session_state.get("jane_auto_image_generation", False)),
-    key="jane_auto_image_generation",
-    help="When enabled, clear requests for pictures can be sent to AI Horde community volunteer workers. Do not use this for private or sensitive prompts.",
-)
-st.checkbox(
-    "Enable internet search for this message",
-    value=bool(st.session_state.get("jane_web_search_enabled", False)),
-    key="jane_web_search_enabled",
-    help="When enabled, J.A.N.E. can use Google Search grounding to look up current information and show source links.",
-)
+st.caption("Internet search is available whenever it can improve an answer. Image generation is available whenever you ask J.A.N.E. to create a picture.")
 with st.container(key="jane_composer_shell"):
     with st.container(key="jane_composer_inner"):
         with st.form("jane_composer_form", clear_on_submit=True):
@@ -2706,7 +2695,7 @@ if prompt:
     detected_file_ext = None if image_mode == "Generate image" else _detect_file_creation_request(prompt)
     if st.session_state.api_enabled:
         try:
-            if image_mode == "Generate image" or (_jane_wants_auto_image(prompt) and st.session_state.get("jane_auto_image_generation", False)):
+            if image_mode == "Generate image" or _jane_wants_auto_image(prompt):
                 image_prompt = prompt if image_mode == "Generate image" else ("Create a clear visual image based on this request. Do not add text unless requested: " + prompt)
                 with st.spinner("J.A.N.E. is waiting for a free volunteer image worker..."):
                     generated_image_bytes = jane_generate_image(image_prompt, width=512, height=512, aspect_ratio="1:1", selected_size="512")
@@ -2771,14 +2760,10 @@ if prompt:
                     speaker = "User" if item["role"] == "user" else "J.A.N.E."
                     conversation.append(f"{speaker}: {item['content']}")
                 conversation.append("J.A.N.E.:")
-                # Use web grounding only when the user clearly requests fresh/current research.
-                latest_user_text = str(prompt).lower()
-                web_triggers = ("search the web", "look up", "latest", "current", "today", "right now", "recent news", "verify online", "research online", "sources", "cite sources", "price today", "weather", "compare", "comparison", "alternatives", "options", "recommend", "recommendations", "best tools", "best apps", "top 10", "list of", "examples of", "which products", "where can i buy", "find me", "show me websites", "multiple results")
-                needs_web_search = bool(st.session_state.get("jane_web_search_enabled", False)) or any(
-                    term in latest_user_text for term in web_triggers
-                ) or bool(re.search(r"\b(buy|shopping|product|products|laptop|phone|headphones|camera|software|service providers)\b", latest_user_text))
+                # Keep Google Search grounding available on every chat request.
+                # Gemini decides when live web research is useful for the user's question.
                 request_config = types.GenerateContentConfig(
-                    tools=[types.Tool(google_search=types.GoogleSearch())] if needs_web_search else None,
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
                 )
                 stream_chunks = []
                 final_stream_chunk = {"value": None}
