@@ -686,6 +686,15 @@ def render_jane_web_visuals(images, key="web-visuals"):
                     st.markdown(f"[Visit source page]({item['source_url']})")
 
 
+def _jane_is_product_request(prompt):
+    """Detect shopping/recommendation prompts that must return readable options, not images alone."""
+    text = str(prompt or "").lower()
+    shopping_terms = r"\b(headphones?|earbuds?|laptops?|phones?|smartphones?|tablets?|cameras?|watches?|smartwatches?|speakers?|monitors?|keyboards?|mice|printers?|products?|buying|buy|purchase|shopping|price|under \₹|under rs\.?|under inr)\b"
+    recommendation_terms = r"\b(top|best|recommend|recommendations?|compare|comparison|options?|alternatives?|which one|suggest|find|show me)\b"
+    number_terms = r"\b(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\b"
+    return bool(re.search(shopping_terms, text) and re.search(recommendation_terms, text) and (re.search(number_terms, text) or re.search(r"\b(best|recommend|compare|comparison|options?|alternatives?|suggest)\b", text)))
+
+
 def _jane_extract_product_cards(content, web_images=None):
     """Extract a structured, source-linked product list emitted by J.A.N.E."""
     text = str(content or "")
@@ -2904,6 +2913,17 @@ if prompt:
                     speaker = "User" if item["role"] == "user" else "J.A.N.E."
                     conversation.append(f"{speaker}: {item['content']}")
                 conversation.append("J.A.N.E.:")
+                product_research_request = _jane_is_product_request(prompt)
+                if product_research_request:
+                    conversation.append(
+                        "MANDATORY PRODUCT-RECOMMENDATION FORMAT FOR THIS REQUEST: This is a shopping/recommendation question. "
+                        "Do NOT answer with images alone and do NOT begin with an image gallery. First provide a readable answer containing "
+                        "up to five distinct product names, a short reason each is worth considering, and a comparison table or numbered list. "
+                        "Use live Google Search results for current models, prices and retailer pages. Never invent a price, specification, product, or URL. "
+                        "If a detail cannot be verified, say 'Price not verified' or leave it out. After the readable recommendations, "
+                        "append a ```jane_products fenced JSON block with a products array; each item must have name, price, reason, url, source_url. "
+                        "Use only URLs actually present in the search evidence. Images are optional supporting material and must never replace the written results."
+                    )
                 # The user controls whether Google Search grounding is available.
                 # When enabled, Gemini decides when live research is useful.
                 if internet_search_enabled:
@@ -2950,6 +2970,43 @@ if prompt:
                 grounding_chunks = getattr(grounding, "grounding_chunks", None) if grounding else None
                 web_images = _jane_extract_web_images(grounding)
                 answer, web_products = _jane_extract_product_cards(answer, web_images)
+                # A product request must not degrade into an image-only answer when the model omits its card protocol.
+                if product_research_request and internet_search_enabled and len(web_products) < 2:
+                    retry_prompt = (
+                        "Search the web now and answer this product request with readable recommendations, not images alone.\n"
+                        f"USER REQUEST: {prompt}\n\n"
+                        "Return up to five genuinely distinct products supported by search results. Start with a concise numbered list or comparison table. "
+                        "For each, include exact product/model name, a brief reason, verified current price if available, and a direct retailer/product URL. "
+                        "Do not guess. If fewer than five can be verified, return fewer and say so. End with exactly one ```jane_products JSON block "
+                        "using {\"products\":[{\"name\":\"...\",\"price\":\"...\",\"reason\":\"...\",\"url\":\"https://...\",\"source_url\":\"https://...\"}]}."
+                    )
+                    try:
+                        with st.spinner("J.A.N.E. is checking product results..."):
+                            retry_result = client.models.generate_content(
+                                model="gemini-3.5-flash-lite",
+                                contents=retry_prompt,
+                                config=types.GenerateContentConfig(
+                                    tools=[types.Tool(google_search=types.GoogleSearch())],
+                                ),
+                            )
+                        retry_text = str(getattr(retry_result, "text", "") or "").strip()
+                        retry_grounding = getattr(retry_result, "grounding_metadata", None)
+                        retry_images = _jane_extract_web_images(retry_grounding)
+                        retry_clean, retry_products = _jane_extract_product_cards(retry_text, retry_images)
+                        if retry_clean:
+                            answer = retry_clean
+                        if retry_products:
+                            web_products = retry_products
+                        if retry_images:
+                            web_images = retry_images
+                        if retry_grounding is not None:
+                            grounding = retry_grounding
+                            grounding_chunks = getattr(grounding, "grounding_chunks", None)
+                    except Exception:
+                        # Keep the original answer visible, but clearly explain why cards may be missing.
+                        if len(web_products) < 2:
+                            answer = (answer.rstrip() + "\n\nI couldn't retrieve enough verified product listings in the extra search attempt. "
+                                      "Please keep Internet Search enabled and try again shortly.").strip()
                 # Replace the streamed raw JSON protocol block with the clean user-facing answer.
                 stream_answer_slot.markdown(answer)
                 source_lines = []
