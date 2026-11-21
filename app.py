@@ -2636,7 +2636,13 @@ image_mode = st.selectbox(
 )
 if image_mode == "Generate image":
     st.caption("Free community-powered generation. Anonymous prompts may be shared for dataset improvement and are processed by volunteer computers; avoid private or sensitive information.")
-st.caption("Internet search is available whenever it can improve an answer. Image generation is available whenever you ask J.A.N.E. to create a picture.")
+internet_search_enabled = st.checkbox(
+    "🌐 Internet search",
+    value=True,
+    key="jane_internet_search_enabled",
+    help="When enabled, J.A.N.E. can use Google Search for current information, product research, images, and source links. Turn it off for answers without live web search.",
+)
+st.caption("Image generation remains available when you ask J.A.N.E. to create a picture.")
 with st.container(key="jane_composer_shell"):
     with st.container(key="jane_composer_inner"):
         with st.form("jane_composer_form", clear_on_submit=True):
@@ -2898,11 +2904,19 @@ if prompt:
                     speaker = "User" if item["role"] == "user" else "J.A.N.E."
                     conversation.append(f"{speaker}: {item['content']}")
                 conversation.append("J.A.N.E.:")
-                # Keep Google Search grounding available on every chat request.
-                # Gemini decides when live web research is useful for the user's question.
-                request_config = types.GenerateContentConfig(
-                    tools=[types.Tool(google_search=types.GoogleSearch())],
-                )
+                # The user controls whether Google Search grounding is available.
+                # When enabled, Gemini decides when live research is useful.
+                if internet_search_enabled:
+                    request_config = types.GenerateContentConfig(
+                        tools=[types.Tool(google_search=types.GoogleSearch())],
+                    )
+                else:
+                    conversation.append(
+                        "LIVE INTERNET SEARCH IS DISABLED by the user's setting. "
+                        "Do not claim to have searched the web, do not invent current prices or URLs, "
+                        "and do not output jane_products JSON cards. Answer from available knowledge and context only."
+                    )
+                    request_config = types.GenerateContentConfig()
                 stream_chunks = []
                 final_stream_chunk = {"value": None}
 
