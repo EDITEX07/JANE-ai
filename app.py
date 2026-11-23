@@ -1344,6 +1344,150 @@ def _firebase_project_id():
         return ""
 
 
+def _firebase_storage_bucket():
+    """Return the configured Firebase Storage bucket (without gs://)."""
+    try:
+        bucket = str(st.secrets.get("FIREBASE_STORAGE_BUCKET", "")).strip()
+    except Exception:
+        bucket = ""
+    if bucket.startswith("gs://"):
+        bucket = bucket[5:]
+    return bucket.rstrip("/")
+
+
+def _firebase_storage_request(method, object_path, data=None, mime_type="application/octet-stream"):
+    """Upload/download a private Firebase Storage object using the signed-in user's token."""
+    user = st.session_state.get("auth_user") or {}
+    if not user.get("uid"):
+        raise RuntimeError("Sign in to save generated images permanently.")
+    bucket = _firebase_storage_bucket()
+    if not bucket:
+        raise RuntimeError("Permanent image saving needs FIREBASE_STORAGE_BUCKET in Streamlit Secrets.")
+    token = st.session_state.get("auth_token") or _refresh_firebase_id_token()
+    encoded_name = urllib.parse.quote(str(object_path).lstrip("/"), safe="")
+    if method == "POST":
+        url = f"https://firebasestorage.googleapis.com/v0/b/{urllib.parse.quote(bucket, safe='')}/o?uploadType=media&name={encoded_name}"
+    else:
+        url = f"https://firebasestorage.googleapis.com/v0/b/{urllib.parse.quote(bucket, safe='')}/o/{encoded_name}?alt=media"
+    request = urllib.request.Request(url, data=data, headers={
+        "Authorization": "Firebase " + token,
+        "Content-Type": mime_type,
+    }, method=method)
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return response.read()
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:300]
+        if exc.code == 401:
+            # Refresh once; Firebase Storage accepts the refreshed Firebase ID token.
+            token = _refresh_firebase_id_token()
+            request = urllib.request.Request(url, data=data, headers={
+                "Authorization": "Firebase " + token,
+                "Content-Type": mime_type,
+            }, method=method)
+            with urllib.request.urlopen(request, timeout=60) as response:
+                return response.read()
+        if exc.code == 403:
+            raise RuntimeError("Firebase Storage denied this image. Check your Storage rules for the signed-in user's own folder.") from None
+        raise RuntimeError(f"Firebase Storage request failed ({exc.code}): {detail}") from None
+
+
+def _supabase_storage_config():
+    """Read server-only Supabase Storage settings from Streamlit Secrets."""
+    try:
+        base_url = str(st.secrets.get("SUPABASE_URL", "")).strip().rstrip("/")
+        # Keep this service-role key server-side in Streamlit Secrets only.
+        api_key = str(st.secrets.get("SUPABASE_SERVICE_ROLE_KEY", "")).strip()
+        bucket = str(st.secrets.get("SUPABASE_STORAGE_BUCKET", "jane-images")).strip().strip("/")
+    except Exception:
+        return "", "", "jane-images"
+    return base_url, api_key, bucket or "jane-images"
+
+
+def _supabase_storage_request(method, object_path, data=None, mime_type="application/octet-stream"):
+    """Upload/download a private Supabase Storage object using server-side credentials."""
+    base_url, api_key, bucket = _supabase_storage_config()
+    if not base_url or not api_key:
+        raise RuntimeError(
+            "Permanent image saving needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Streamlit Secrets."
+        )
+    clean_path = str(object_path).lstrip("/")
+    encoded_path = urllib.parse.quote(clean_path, safe="/")
+    encoded_bucket = urllib.parse.quote(bucket, safe="")
+    url = f"{base_url}/storage/v1/object/{encoded_bucket}/{encoded_path}"
+    headers = {
+        "apikey": api_key,
+        "Authorization": "Bearer " + api_key,
+        "Content-Type": mime_type,
+    }
+    if method == "POST":
+        headers["x-upsert"] = "true"
+    request = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return response.read()
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:300]
+        if exc.code in (401, 403):
+            raise RuntimeError(
+                "Supabase Storage denied the request. Check the server-side service key and that the private bucket exists."
+            ) from None
+        if exc.code == 404:
+            raise RuntimeError(
+                "The saved image was not found. Check that the Supabase bucket name is correct and the image still exists."
+            ) from None
+        raise RuntimeError(f"Supabase Storage request failed ({exc.code}): {detail}") from None
+
+
+def _save_generated_image_to_storage(chat_id, image_bytes, filename="jane_generated_image.png"):
+    """Save generated image bytes to the configured private Supabase bucket."""
+    uid = str((st.session_state.get("auth_user") or {}).get("uid", ""))
+    if not uid:
+        return ""
+    safe_chat_id = re.sub(r"[^A-Za-z0-9_-]", "_", str(chat_id))[:100]
+    image_id = str(uuid.uuid4())
+    object_path = f"users/{uid}/chats/{safe_chat_id}/{image_id}_{Path(filename).name}"
+    _supabase_storage_request("POST", object_path, data=image_bytes, mime_type="image/png")
+    _, _, bucket = _supabase_storage_config()
+    return f"supabase://{bucket}/{object_path}"
+
+
+def _load_generated_image_from_storage(object_path):
+    if not object_path:
+        return None
+    try:
+        # New durable references use Supabase. Older plain paths are legacy Firebase Storage refs.
+        if str(object_path).startswith("supabase://"):
+            bucket_and_path = str(object_path)[len("supabase://"):]
+            bucket, sep, path = bucket_and_path.partition("/")
+            if not sep or not bucket or not path:
+                return None
+            base_url, api_key, _configured_bucket = _supabase_storage_config()
+            if not base_url or not api_key:
+                return None
+            # Use the bucket stored with the reference so a later setting change does not break old chats.
+            original_bucket = _configured_bucket
+            try:
+                # The request helper uses the configured bucket; temporarily build the exact URL here
+                # when a saved reference names a different bucket.
+                if bucket == original_bucket:
+                    return _supabase_storage_request("GET", path)
+                encoded_path = urllib.parse.quote(path.lstrip("/"), safe="/")
+                url = f"{base_url}/storage/v1/object/{urllib.parse.quote(bucket, safe='')}/{encoded_path}"
+                request = urllib.request.Request(url, headers={
+                    "apikey": api_key,
+                    "Authorization": "Bearer " + api_key,
+                }, method="GET")
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    return response.read()
+            except Exception:
+                return None
+        # Backward compatibility for images previously saved in Firebase Storage.
+        return _firebase_storage_request("GET", object_path)
+    except Exception:
+        return None
+
+
 def _refresh_firebase_id_token():
     """Refresh the short-lived Firebase ID token using the sign-in refresh token."""
     refresh_token = st.session_state.get("auth_refresh_token")
@@ -1969,6 +2113,12 @@ def load_chat_history():
             messages = payload.get("messages", [])
             if not isinstance(messages, list):
                 messages = []
+            # Restore generated images from private Firebase Storage after a new app session.
+            for saved_message in messages:
+                if isinstance(saved_message, dict) and saved_message.get("image_storage_path"):
+                    restored_image = _load_generated_image_from_storage(saved_message["image_storage_path"])
+                    if restored_image:
+                        saved_message["image_bytes"] = restored_image
             chats[chat_id] = {
                 "title": str(payload.get("title", "New conversation")),
                 "created": str(payload.get("created", "")),
@@ -2755,6 +2905,13 @@ for message_index, message in enumerate(chat["messages"]):
         if message.get("image_bytes"):
             st.image(message["image_bytes"], caption="Generated by J.A.N.E.", use_container_width=True)
             st.download_button("⬇ Download image", data=message["image_bytes"], file_name=message.get("image_filename", "jane_generated_image.png"), mime="image/png", key=f"download_image_{message_index}")
+        elif message.get("image_storage_path"):
+            restored_image = _load_generated_image_from_storage(message["image_storage_path"])
+            if restored_image:
+                st.image(restored_image, caption="Generated by J.A.N.E.", use_container_width=True)
+                st.download_button("⬇ Download image", data=restored_image, file_name=message.get("image_filename", "jane_generated_image.png"), mime="image/png", key=f"download_saved_image_{message_index}")
+            else:
+                st.caption("This saved image could not be retrieved. Check your Firebase Storage bucket and rules.")
         elif message.get("image_url"):
             st.image(message["image_url"], caption="Image provided by J.A.N.E.", use_container_width=True)
         elif message.get("image_file"):
@@ -3289,6 +3446,14 @@ if prompt:
     if generated_image_bytes:
         assistant_message["image_bytes"] = generated_image_bytes
         assistant_message["image_filename"] = "jane_generated_image.png"
+        # Store the binary separately from Firestore so the image survives app/session expiry.
+        if st.session_state.get("auth_user"):
+            try:
+                assistant_message["image_storage_path"] = _save_generated_image_to_storage(
+                    st.session_state.current_chat, generated_image_bytes, assistant_message["image_filename"]
+                )
+            except Exception as storage_error:
+                st.session_state.image_persistence_error = str(storage_error)
     if generated_file:
         assistant_message["file_bytes"] = generated_file["bytes"]
         assistant_message["file_name"] = generated_file["filename"]
@@ -3327,6 +3492,10 @@ if prompt:
                 if st.session_state.get("last_image_engine") == "AI Horde fallback":
                     st.info(st.session_state.get("last_image_engine_note", "AI Horde was used as a fallback."))
                 st.download_button("⬇ Download image", data=generated_image_bytes, file_name="jane_generated_image.png", mime="image/png", key=f"download_latest_image_{len(chat['messages'])}")
+                if st.session_state.get("image_persistence_error"):
+                    st.warning("This image is available in this session but was not saved permanently: " + st.session_state.image_persistence_error)
+                elif assistant_message.get("image_storage_path"):
+                    st.caption("Saved to your private J.A.N.E. image storage.")
             elif generated_file:
                 st.download_button(
                     f"⬇ Download {generated_file['filename']}",
