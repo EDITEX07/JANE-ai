@@ -359,6 +359,33 @@ def _uploaded_extension(filename, file_info):
 def _is_uploaded_image(filename, file_info):
     return _uploaded_extension(filename, file_info) in IMAGE_MIME_BY_EXT or str((file_info or {}).get("type") or "").lower().startswith("image/")
 
+def _prepare_image_for_vision(filename, data, mime_type):
+    """Return a Gemini-compatible image payload; normalize formats Gemini may not accept."""
+    detected = mime_type or "application/octet-stream"
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            image.seek(0)  # First frame for animated formats; avoid silently sending the container.
+            if detected not in ("image/png", "image/jpeg", "image/webp", "image/gif"):
+                image = image.convert("RGB")
+                out = io.BytesIO()
+                image.save(out, format="JPEG", quality=92)
+                return out.getvalue(), "image/jpeg"
+            # Re-encode to remove unusual metadata/encodings while preserving supported format.
+            out = io.BytesIO()
+            fmt = {"image/png": "PNG", "image/jpeg": "JPEG", "image/webp": "WEBP", "image/gif": "GIF"}[detected]
+            image.save(out, format=fmt)
+            return out.getvalue(), detected
+    except Exception:
+        # SVG is text-based; rasterize only when CairoSVG is installed.
+        if detected == "image/svg+xml" or str(filename).lower().endswith(".svg"):
+            try:
+                import cairosvg
+                return cairosvg.svg2png(bytestring=data), "image/png"
+            except Exception:
+                return None, None
+        return data, detected if detected.startswith("image/") else None
+
+
 def _gemini_describe_uploaded_binary(filename, data, mime_type, instruction=None, model=None):
     """Ask Gemini to inspect supported binary media directly, without pretending unsupported formats were parsed."""
     if not mime_type or len(data) > 18 * 1024 * 1024:
@@ -394,15 +421,23 @@ def extract_uploaded_file_text(filename, file_info):
             elif data[:4] == b"RIFF" and data[8:12] == b"WEBP": mime_type = "image/webp"
             elif data.startswith((b"GIF87a", b"GIF89a")): mime_type = "image/gif"
             elif data.startswith((b"II*\x00", b"MM\x00*")): mime_type = "image/tiff"
+            vision_bytes, vision_mime = _prepare_image_for_vision(filename, data, mime_type)
+            if not vision_bytes or not vision_mime:
+                return (f"J.A.N.E. received {filename}, but this image format could not be converted for visual analysis. "
+                        "Please export it as PNG, JPG, or WEBP and attach it again.")
             result = _gemini_describe_uploaded_binary(
-                filename, data, mime_type,
-                "Inspect this uploaded image carefully. Describe visible objects, people, scene, layout, charts and diagrams. "
-                "Extract visible text faithfully, preserving language and numbers. Do not guess unclear details; mark them [unclear]."
+                filename, vision_bytes, vision_mime,
+                "You are inspecting an image uploaded by the user. Actually examine the image pixels. "
+                "Describe visible objects, people, scene, layout, charts and diagrams. Read visible text faithfully, "
+                "preserving language, spelling and numbers. Explain relationships and spatial positions. "
+                "Do not claim details that are not visible; mark unclear text or objects as [unclear]."
             )
-            return result or f"Image file attached: {filename}. Image analysis could not be started for this format."
+            if result and "could not inspect its contents" in result:
+                return result
+            return result or f"Image file attached: {filename}, but the vision model returned no description."
 
         # Text, source code, configuration, subtitles, structured text and notebook files.
-        if extension in TEXT_LIKE_EXTENSIONS or lower_name in ("dockerfile", "makefile", "readme", "license"):
+        if (extension in TEXT_LIKE_EXTENSIONS and extension not in (".csv", ".tsv")) or lower_name in ("dockerfile", "makefile", "readme", "license"):
             decoded = data.decode("utf-8-sig", errors="replace")
             if extension == ".ipynb" or lower_name.endswith(".ipynb"):
                 try:
