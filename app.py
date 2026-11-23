@@ -469,7 +469,7 @@ def build_attached_file_context():
 # -------------------- SESSION STATE --------------------
 if "chats" not in st.session_state:
     first_id = str(uuid.uuid4())
-    st.session_state.chats = {first_id: {"title": "New conversation", "messages": [], "created": datetime.now().strftime("%d %b %Y, %H:%M")}}
+    st.session_state.chats = {first_id: {"title": "New conversation", "summary": "No messages yet", "messages": [], "created": datetime.now().strftime("%d %b %Y, %H:%M"), "updated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z"}}
     st.session_state.current_chat = first_id
 for key, default in {
     "profile_name": "Explorer", "api_enabled": True, "uploaded_files": {},
@@ -494,7 +494,7 @@ st.session_state.api_enabled = True
 
 def make_chat():
     chat_id = str(uuid.uuid4())
-    st.session_state.chats[chat_id] = {"title": "New conversation", "messages": [], "created": datetime.now().strftime("%d %b %Y, %H:%M")}
+    st.session_state.chats[chat_id] = {"title": "New conversation", "summary": "No messages yet", "messages": [], "created": datetime.now().strftime("%d %b %Y, %H:%M"), "updated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z"}
     st.session_state.current_chat = chat_id
 
 
@@ -543,16 +543,39 @@ def suggest_chat_title(prompt):
     return text[:56].rstrip(" ,.-") or None
 
 
+def _chat_summary_from_messages(messages, limit=150):
+    """Build a compact, readable chat summary without another paid model call."""
+    user_texts = [
+        re.sub(r"\s+", " ", str(item.get("content", ""))).strip()
+        for item in (messages or [])
+        if item.get("role") == "user" and str(item.get("content", "")).strip()
+    ]
+    if not user_texts:
+        return "No messages yet"
+    first = user_texts[0].strip(" .!?;:")
+    latest = user_texts[-1].strip(" .!?;:")
+    if len(user_texts) == 1 or first.lower() == latest.lower():
+        summary = first
+    else:
+        summary = f"{first} · Latest: {latest}"
+    return summary[:limit].rstrip(" ,.;:-") + ("…" if len(summary) > limit else "")
+
+
 def update_chat_title(chat, prompt):
-    """Ignore greetings; allow the first meaningful message to name the chat."""
+    """Name the chat from its first substantive message and refresh its summary/activity."""
     title = str(chat.get("title", "New conversation")).strip()
     generic_titles = {"", "new conversation", "hi", "hello", "hey", "yo", "sup", "good morning", "good afternoon", "good evening"}
-    # Also repair older sessions that were titled from a greeting.
     candidate = suggest_chat_title(prompt)
-    if not candidate:
-        return
-    if title.lower() in generic_titles:
+    if candidate and title.lower() in generic_titles:
         chat["title"] = candidate
+    chat["summary"] = _chat_summary_from_messages(chat.get("messages", []))
+    chat["updated_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+
+
+def _chat_sort_key(item):
+    """Sort by last activity, falling back to legacy creation timestamps."""
+    chat = item[1]
+    return str(chat.get("updated_at") or chat.get("updatedAt") or chat.get("created") or "")
 
 
 @st.dialog("Choose intelligence")
@@ -1624,6 +1647,8 @@ def save_chat_history(chat_id, chat_data):
         "id": str(chat_id),
         "title": str(chat_data.get("title", "New conversation"))[:160],
         "created": str(chat_data.get("created", now)),
+        "summary": str(chat_data.get("summary") or _chat_summary_from_messages(safe_messages))[:500],
+        "updated_at": now,
         "updatedAt": now,
         "messages": safe_messages,
     }
@@ -1631,11 +1656,12 @@ def save_chat_history(chat_id, chat_data):
         "payload": {"stringValue": json.dumps(payload, ensure_ascii=False)},
         "title": {"stringValue": payload["title"]},
         "created": {"stringValue": payload["created"]},
+        "summary": {"stringValue": payload["summary"]},
         "updatedAt": {"timestampValue": now},
     }}
     path = _chat_collection_path() + "/" + str(chat_id)
     try:
-        _firestore_request("PATCH", path + "?updateMask.fieldPaths=payload&updateMask.fieldPaths=title&updateMask.fieldPaths=created&updateMask.fieldPaths=updatedAt", document)
+        _firestore_request("PATCH", path + "?updateMask.fieldPaths=payload&updateMask.fieldPaths=title&updateMask.fieldPaths=created&updateMask.fieldPaths=summary&updateMask.fieldPaths=updatedAt", document)
     except RuntimeError as exc:
         if "(404)" not in str(exc):
             raise
@@ -1788,7 +1814,9 @@ def import_shared_chat(value):
     title = "Shared · " + str(payload.get("title", "Conversation"))[:140]
     st.session_state.chats[new_id] = {
         "title": title,
+        "summary": _chat_summary_from_messages(imported_messages),
         "created": datetime.now().strftime("%d %b %Y, %H:%M"),
+        "updated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
         "messages": imported_messages,
     }
     st.session_state.current_chat = new_id
@@ -1829,6 +1857,8 @@ def load_chat_history():
             chats[chat_id] = {
                 "title": str(payload.get("title", "New conversation")),
                 "created": str(payload.get("created", "")),
+                "summary": str(payload.get("summary") or _chat_summary_from_messages(messages)),
+                "updated_at": str(payload.get("updated_at") or fields.get("updatedAt") or payload.get("created", "")),
                 "messages": messages,
             }
         except (TypeError, ValueError):
@@ -2033,8 +2063,8 @@ if st.session_state.get("auth_user"):
             if saved_chats:
                 # Keep current in-session chats while merging the account's saved history.
                 saved_chats.update(st.session_state.chats)
-                st.session_state.chats = saved_chats
-                st.session_state.current_chat = next(reversed(saved_chats))
+                st.session_state.chats = dict(sorted(saved_chats.items(), key=_chat_sort_key))
+                st.session_state.current_chat = max(st.session_state.chats.items(), key=_chat_sort_key)[0]
             st.session_state.chat_history_loaded_uid = active_uid
             st.session_state.chat_history_error = ""
         except Exception as exc:
@@ -2182,16 +2212,18 @@ with st.sidebar:
                 try:
                     saved_chats = load_chat_history()
                     st.session_state.chats.update(saved_chats)
+                    st.session_state.chats = dict(sorted(st.session_state.chats.items(), key=_chat_sort_key))
                     st.session_state.chat_history_error = ""
                     st.rerun()
                 except Exception as exc:
                     st.session_state.chat_history_error = str(exc)
                     st.rerun()
-            for saved_id, saved_data in reversed(list(st.session_state.chats.items())):
+            for saved_id, saved_data in sorted(st.session_state.chats.items(), key=_chat_sort_key, reverse=True):
                 if not saved_data.get("messages"):
                     continue
                 with st.container(border=True):
                     st.write(saved_data.get("title", "New conversation"))
+                    st.caption(saved_data.get("summary") or _chat_summary_from_messages(saved_data.get("messages", [])))
                     a, b = st.columns(2)
                     with a:
                         if st.button("Open", key="open_saved_chat_" + saved_id, use_container_width=True):
@@ -2220,10 +2252,10 @@ with st.sidebar:
     if st.button("＋  New chat", use_container_width=True):
         make_chat(); st.rerun()
     st.divider(); st.markdown("### 💬 Chat history")
-    for chat_id, chat_data in reversed(list(st.session_state.chats.items())):
-        label = chat_data["title"][:30] or "New conversation"
+    for chat_id, chat_data in sorted(st.session_state.chats.items(), key=_chat_sort_key, reverse=True):
+        label = chat_data.get("title", "New conversation")[:30] or "New conversation"
         if chat_id == st.session_state.current_chat: label = "● " + label
-        if st.button(label, key=f"select_chat_{chat_id}", use_container_width=True):
+        if st.button(label, key=f"select_chat_{chat_id}", use_container_width=True, help=chat_data.get("summary") or _chat_summary_from_messages(chat_data.get("messages", []))):
             st.session_state.current_chat = chat_id; st.rerun()
     st.divider(); st.markdown("### 📎 Documents & attachments")
     uploaded = st.file_uploader("Attach files", type=None, accept_multiple_files=True, help="Upload any file type or extension. Files remain in the current app session and are not permanently stored.")
@@ -3147,6 +3179,8 @@ if prompt:
         assistant_message["file_name"] = generated_file["filename"]
         assistant_message["file_mime"] = generated_file["mime"]
     chat["messages"].append(assistant_message)
+    chat["summary"] = _chat_summary_from_messages(chat.get("messages", []))
+    chat["updated_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     # Persist full text conversation for signed-in users; Guest chat history stays session-only.
     if st.session_state.get("auth_user"):
         try:
