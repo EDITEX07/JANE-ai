@@ -990,7 +990,9 @@ html,body,[class*="css"]{font-family:Inter,system-ui,sans-serif}
 [data-testid="stSidebar"] button[kind="secondary"]{ } 
 
 [data-testid="stHeader"]{background:rgba(11,11,16,.88)}[data-testid="stSidebar"]{background:#0b0b10;border-right:1px solid var(--jane-border)}
-[class*="st-key-delete_chat_"] button{min-width:30px!important;width:30px!important;height:34px!important;min-height:34px!important;padding:0!important;border-radius:9px!important;font-size:17px!important;line-height:1!important;color:var(--jane-accent,#ff465c)!important;border:1px solid var(--jane-accent,#ff465c)!important;background:transparent!important;box-shadow:none!important}
+[class*="st-key-delete_chat_"] button{min-width:30px!important;width:30px!important;height:30px!important;min-height:30px!important;padding:0!important;border-radius:9px!important;font-size:19px!important;line-height:1!important;color:var(--jane-accent,#ff465c)!important;border:1px solid var(--jane-accent,#ff465c)!important;background:transparent!important;box-shadow:none!important}
+[class*="st-key-chat_card_"] [data-testid="stVerticalBlockBorderWrapper"]{border:2px solid var(--jane-accent,#ff465c)!important;border-radius:14px!important;background:rgba(255,255,255,.025)!important;padding:10px 10px 7px!important}
+[class*="st-key-chat_card_"] [data-testid="stVerticalBlock"]{gap:.45rem!important}
 
 .block-container{max-width:1040px;padding-top:1rem;padding-bottom:135px}
 .jane-logo-wrap{display:flex;justify-content:center;align-items:center;width:100%;padding:5px 0 8px}
@@ -1276,7 +1278,8 @@ st.markdown(f'''<style>
  box-shadow:0 5px 24px rgba({theme["glow"]},.12),inset 0 1px rgba(255,255,255,.055)!important;
 }}
  :root{{--jane-accent:{theme["accent"]};--jane-deep:{theme["deep"]};}}
-[class*="st-key-delete_chat_"] button{{color:{theme["accent"]}!important;border-color:{theme["accent"]}!important;background:transparent!important;min-width:30px!important;width:30px!important;height:34px!important;min-height:34px!important;padding:0!important;font-size:17px!important;}}
+[class*="st-key-delete_chat_"] button{{color:{theme["accent"]}!important;border-color:{theme["accent"]}!important;background:transparent!important;min-width:30px!important;width:30px!important;height:30px!important;min-height:30px!important;padding:0!important;font-size:19px!important;}}
+[class*="st-key-chat_card_"] [data-testid="stVerticalBlockBorderWrapper"]{{border:2px solid {theme["accent"]}!important;border-radius:14px!important;background:rgba({theme["glow"]},.035)!important;padding:10px 10px 7px!important;}}
 .st-key-jane_composer_shell{{border-color:{theme["accent"]}!important;background:linear-gradient(125deg,{theme["accent"]} 0%,{theme["deep"]} 34%,#26111c 68%,{theme["accent"]} 100%)!important;}}
 .st-key-jane_composer_inner{{background:#0d0b10!important;}}
 .st-key-jane_composer_inner [data-testid="stPopover"] button,
@@ -2561,7 +2564,7 @@ with st.sidebar:
             st.session_state["confirm_clear_all_chats"] = True
 
     if st.session_state.get("confirm_clear_all_chats"):
-        st.warning("Delete all conversations? Your Memory Center, account, documents, and settings will stay untouched.")
+        st.warning("Delete all conversations? Your Memory Center and saved memories will NOT be deleted. Your account, documents, and settings will also stay untouched.")
         clear_cols = st.columns(2)
         with clear_cols[0]:
             if st.button("Delete all", key="sidebar_confirm_clear_all", type="primary", use_container_width=True):
@@ -2593,30 +2596,43 @@ with st.sidebar:
                 st.session_state["confirm_clear_all_chats"] = False
                 st.rerun()
 
-    # The sidebar is the chat-history view: each conversation is directly
-    # accessible, with a compact accent-coloured delete control beside it.
+    # Each saved conversation is shown in a thicker, accent-coloured card.
+    # The small X sits at the bottom-right and always asks before deleting.
     for chat_id, chat_data in sorted(st.session_state.chats.items(), key=_chat_sort_key, reverse=True):
         title = str(chat_data.get("title", "New conversation"))[:34] or "New conversation"
         summary = chat_data.get("summary") or _chat_summary_from_messages(chat_data.get("messages", []))
-        chat_cols = st.columns([8, 1], gap="small")
-        with chat_cols[0]:
+        safe_chat_key = re.sub(r"[^a-zA-Z0-9_-]", "_", str(chat_id))[:48]
+        with st.container(border=True, key=f"chat_card_{safe_chat_key}"):
             label = ("● " if chat_id == st.session_state.current_chat else "") + title
-            if st.button(label, key=f"select_chat_{chat_id}", use_container_width=True, help=summary):
+            if st.button(label, key=f"select_chat_{safe_chat_key}", use_container_width=True, help=summary):
                 st.session_state.current_chat = chat_id
                 st.rerun()
-        with chat_cols[1]:
-            if st.button("×", key=f"delete_chat_{chat_id}", help="Delete this conversation"):
-                try:
-                    if st.session_state.get("auth_user"):
-                        delete_chat_history(chat_id)
-                    st.session_state.chats.pop(chat_id, None)
-                    if not st.session_state.chats or st.session_state.current_chat == chat_id:
-                        make_chat()
-                        if st.session_state.get("auth_user"):
-                            save_chat_history(st.session_state.current_chat, st.session_state.chats[st.session_state.current_chat])
-                except Exception as exc:
-                    st.session_state.chat_history_error = str(exc)
-                st.rerun()
+            delete_cols = st.columns([5, 1])
+            with delete_cols[1]:
+                if st.button("×", key=f"delete_chat_{safe_chat_key}", help="Delete this conversation"):
+                    st.session_state["confirm_delete_chat_id"] = chat_id
+                    st.rerun()
+            if st.session_state.get("confirm_delete_chat_id") == chat_id:
+                st.warning("Delete this conversation? Your Memory Center and saved memories will NOT be deleted.")
+                confirm_cols = st.columns(2)
+                with confirm_cols[0]:
+                    if st.button("Delete chat", key=f"confirm_delete_chat_{safe_chat_key}", type="primary", use_container_width=True):
+                        try:
+                            if st.session_state.get("auth_user"):
+                                delete_chat_history(chat_id)
+                            st.session_state.chats.pop(chat_id, None)
+                            st.session_state["confirm_delete_chat_id"] = None
+                            if not st.session_state.chats or st.session_state.current_chat == chat_id:
+                                make_chat()
+                                if st.session_state.get("auth_user"):
+                                    save_chat_history(st.session_state.current_chat, st.session_state.chats[st.session_state.current_chat])
+                        except Exception as exc:
+                            st.session_state.chat_history_error = str(exc)
+                        st.rerun()
+                with confirm_cols[1]:
+                    if st.button("Cancel", key=f"cancel_delete_chat_{safe_chat_key}", use_container_width=True):
+                        st.session_state["confirm_delete_chat_id"] = None
+                        st.rerun()
     st.divider(); st.markdown("### 📎 Documents & attachments")
     uploaded = st.file_uploader("Attach files", type=None, accept_multiple_files=True, help="Upload any file type or extension. Files remain in the current app session and are not permanently stored.")
     if uploaded:
@@ -2787,16 +2803,23 @@ if workspace_view == "Image Studio":
                 studio_width, studio_height = image_dimensions_for_ratio(studio_ratio, studio_longest_side)
                 reference_bytes = _prepare_reference_image_bytes(reference_upload.getvalue()) if reference_upload is not None else None
                 enhanced_studio_prompt = build_studio_image_prompt(clean_studio_prompt, studio_style)
-                with st.spinner("J.A.N.E. is waiting for a free volunteer image worker..."):
+                loading_game_slot = st.empty()
+                with loading_game_slot.container():
                     _render_image_loading_game(theme)
-                    generated_bytes = jane_generate_image(
-                        enhanced_studio_prompt,
-                        width=studio_width,
-                        height=studio_height,
-                        source_image_bytes=reference_bytes,
-                        aspect_ratio=studio_ratio,
-                        selected_size=studio_size,
-                    )
+                try:
+                    with st.spinner("J.A.N.E. is waiting for a free volunteer image worker..."):
+                        generated_bytes = jane_generate_image(
+                            enhanced_studio_prompt,
+                            width=studio_width,
+                            height=studio_height,
+                            source_image_bytes=reference_bytes,
+                            aspect_ratio=studio_ratio,
+                            selected_size=studio_size,
+                        )
+                finally:
+                    # Remove the interactive game immediately when generation ends,
+                    # whether it succeeds or raises an error.
+                    loading_game_slot.empty()
 
                 new_images = [{
                     "id": str(uuid.uuid4()),
@@ -3250,9 +3273,15 @@ if prompt:
         try:
             if image_mode == "Generate image" or _jane_wants_auto_image(prompt):
                 image_prompt = prompt if image_mode == "Generate image" else ("Create a clear visual image based on this request. Do not add text unless requested: " + prompt)
-                with st.spinner("J.A.N.E. is waiting for a free volunteer image worker..."):
+                loading_game_slot = st.empty()
+                with loading_game_slot.container():
                     _render_image_loading_game(theme)
-                    generated_image_bytes = jane_generate_image(image_prompt, width=512, height=512, aspect_ratio="1:1", selected_size="512")
+                try:
+                    with st.spinner("J.A.N.E. is waiting for a free volunteer image worker..."):
+                        generated_image_bytes = jane_generate_image(image_prompt, width=512, height=512, aspect_ratio="1:1", selected_size="512")
+                finally:
+                    # Clear Pulse Catcher as soon as the image request finishes.
+                    loading_game_slot.empty()
                 answer = "Here is your image. You can download it below."
             elif detected_file_ext:
                 with st.spinner(f"J.A.N.E. is creating your .{detected_file_ext} file..."):
