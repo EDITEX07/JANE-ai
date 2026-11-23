@@ -2469,7 +2469,7 @@ with st.sidebar:
                                 st.error(str(exc))
             except Exception as exc:
                 st.warning("Memory is not connected yet: " + str(exc))
-        with st.expander("💬 Saved chat history", expanded=False):
+        with st.expander("💬 Saved chat history & chat controls", expanded=True):
             st.caption("Your signed-in conversations sync through Firestore. Guest chats remain temporary.")
             if st.session_state.get("chat_history_error"):
                 st.warning("Chat history could not load: " + st.session_state.chat_history_error)
@@ -2483,6 +2483,44 @@ with st.sidebar:
                 except Exception as exc:
                     st.session_state.chat_history_error = str(exc)
                     st.rerun()
+            # Clear-all is deliberately separated into request and confirmation steps.
+            if st.button("🗑️ Clear all chats", key="clear_all_chats_request", use_container_width=True):
+                st.session_state["confirm_clear_all_chats"] = True
+            if st.session_state.get("confirm_clear_all_chats"):
+                st.warning("This permanently deletes all your saved conversations and clears this session's chat list. Your account, memories, documents, and settings will remain.")
+                confirm_col, cancel_col = st.columns(2)
+                with confirm_col:
+                    if st.button("Yes, clear all", key="confirm_clear_all_chats", type="primary", use_container_width=True):
+                        try:
+                            # Fetch the server's current list first so chats not currently
+                            # loaded in this browser session are included as well.
+                            remote_chats = load_chat_history() if st.session_state.get("auth_user") else {}
+                            remote_ids = list(remote_chats.keys())
+                            failed_deletions = []
+                            for remote_id in remote_ids:
+                                try:
+                                    delete_chat_history(remote_id)
+                                except Exception as delete_exc:
+                                    failed_deletions.append((remote_id, str(delete_exc)))
+                            if failed_deletions:
+                                # Keep any conversations whose remote deletion failed.
+                                remaining = {cid: data for cid, data in st.session_state.chats.items() if cid not in remote_ids or any(cid == failed_id for failed_id, _ in failed_deletions)}
+                                st.session_state.chats = remaining
+                                st.session_state["confirm_clear_all_chats"] = False
+                                st.error(f"Deleted {len(remote_ids) - len(failed_deletions)} conversation(s), but {len(failed_deletions)} could not be deleted. Refresh chat history and try again.")
+                            else:
+                                st.session_state.chats = {}
+                                make_chat()
+                                st.session_state["chat_history_error"] = ""
+                                st.session_state["confirm_clear_all_chats"] = False
+                                st.success("All chats cleared. Your memories and account are unchanged.")
+                        except Exception as clear_exc:
+                            st.session_state["confirm_clear_all_chats"] = False
+                            st.error("Could not clear chats: " + str(clear_exc))
+                with cancel_col:
+                    if st.button("Cancel", key="cancel_clear_all_chats", use_container_width=True):
+                        st.session_state["confirm_clear_all_chats"] = False
+                        st.rerun()
             for saved_id, saved_data in sorted(st.session_state.chats.items(), key=_chat_sort_key, reverse=True):
                 if not saved_data.get("messages"):
                     continue
