@@ -22,6 +22,15 @@ except Exception:
     pass
 import streamlit as st
 import streamlit.components.v1 as components
+
+# Browser tab title and app icon. Keep app-logo.png beside app.py in the repo.
+_APP_ICON_PATH = Path(__file__).with_name("app-logo.png")
+st.set_page_config(
+    page_title="J.A.N.E. | AI Workspace |",
+    page_icon=str(_APP_ICON_PATH) if _APP_ICON_PATH.is_file() else "🤖",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 from google import genai
 from google.genai import types
 from openai import OpenAI
