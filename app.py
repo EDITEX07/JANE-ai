@@ -2804,7 +2804,9 @@ if workspace_view == "Image Studio":
                 reference_bytes = _prepare_reference_image_bytes(reference_upload.getvalue()) if reference_upload is not None else None
                 enhanced_studio_prompt = build_studio_image_prompt(clean_studio_prompt, studio_style)
                 loading_game_slot = st.empty()
-                with loading_game_slot.container():
+                # Render the game directly inside the placeholder (not a nested container)
+                # so Streamlit can reliably remove the iframe when generation completes.
+                with loading_game_slot:
                     _render_image_loading_game(theme)
                 try:
                     with st.spinner("J.A.N.E. is waiting for a free volunteer image worker..."):
@@ -2819,6 +2821,8 @@ if workspace_view == "Image Studio":
                 finally:
                     # Remove the interactive game immediately when generation ends,
                     # whether it succeeds or raises an error.
+                    loading_game_slot.empty()
+                    # Replace the former iframe slot with an empty element immediately.
                     loading_game_slot.empty()
 
                 new_images = [{
@@ -3274,13 +3278,17 @@ if prompt:
             if image_mode == "Generate image" or _jane_wants_auto_image(prompt):
                 image_prompt = prompt if image_mode == "Generate image" else ("Create a clear visual image based on this request. Do not add text unless requested: " + prompt)
                 loading_game_slot = st.empty()
-                with loading_game_slot.container():
+                # Render the game directly inside the placeholder (not a nested container)
+                # so Streamlit can reliably remove the iframe when generation completes.
+                with loading_game_slot:
                     _render_image_loading_game(theme)
                 try:
                     with st.spinner("J.A.N.E. is waiting for a free volunteer image worker..."):
                         generated_image_bytes = jane_generate_image(image_prompt, width=512, height=512, aspect_ratio="1:1", selected_size="512")
                 finally:
                     # Clear Pulse Catcher as soon as the image request finishes.
+                    loading_game_slot.empty()
+                    # Explicitly clear the placeholder again to prevent a stale game iframe.
                     loading_game_slot.empty()
                 answer = "Here is your image. You can download it below."
             elif detected_file_ext:
