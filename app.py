@@ -987,7 +987,11 @@ st.markdown(r'''<style>
 :root{--jane-red:#ff465c;--jane-border:#402331;--jane-muted:#aaa5b2}
 html,body,[class*="css"]{font-family:Inter,system-ui,sans-serif}
 .stApp{color:#f4f4f5;background:radial-gradient(ellipse at 50% 0%,#29101b 0%,#130d14 40%,#09090d 100%)}
+[data-testid="stSidebar"] button[kind="secondary"]{ } 
+
 [data-testid="stHeader"]{background:rgba(11,11,16,.88)}[data-testid="stSidebar"]{background:#0b0b10;border-right:1px solid var(--jane-border)}
+[class*="st-key-delete_chat_"] button{min-width:30px!important;width:30px!important;height:34px!important;min-height:34px!important;padding:0!important;border-radius:9px!important;font-size:17px!important;line-height:1!important;color:var(--jane-accent,#ff465c)!important;border:1px solid var(--jane-accent,#ff465c)!important;background:transparent!important;box-shadow:none!important}
+
 .block-container{max-width:1040px;padding-top:1rem;padding-bottom:135px}
 .jane-logo-wrap{display:flex;justify-content:center;align-items:center;width:100%;padding:5px 0 8px}
 .jane-logo{width:160px;max-width:44vw;height:auto;object-fit:contain;filter:drop-shadow(0 0 7px rgba(255,36,61,.75));animation:janePulse 3s ease-in-out infinite}
@@ -1271,7 +1275,8 @@ st.markdown(f'''<style>
  border-color:rgba({theme["glow"]},.55)!important;
  box-shadow:0 5px 24px rgba({theme["glow"]},.12),inset 0 1px rgba(255,255,255,.055)!important;
 }}
- :root{{--jane-deep:{theme["deep"]};}}
+ :root{{--jane-accent:{theme["accent"]};--jane-deep:{theme["deep"]};}}
+[class*="st-key-delete_chat_"] button{{color:{theme["accent"]}!important;border-color:{theme["accent"]}!important;background:transparent!important;min-width:30px!important;width:30px!important;height:34px!important;min-height:34px!important;padding:0!important;font-size:17px!important;}}
 .st-key-jane_composer_shell{{border-color:{theme["accent"]}!important;background:linear-gradient(125deg,{theme["accent"]} 0%,{theme["deep"]} 34%,#26111c 68%,{theme["accent"]} 100%)!important;}}
 .st-key-jane_composer_inner{{background:#0d0b10!important;}}
 .st-key-jane_composer_inner [data-testid="stPopover"] button,
@@ -2521,79 +2526,6 @@ with st.sidebar:
                                 st.error(str(exc))
             except Exception as exc:
                 st.warning("Memory is not connected yet: " + str(exc))
-        with st.expander("💬 Saved chat history & chat controls", expanded=True):
-            st.caption("Your signed-in conversations sync through Firestore. Guest chats remain temporary.")
-            if st.session_state.get("chat_history_error"):
-                st.warning("Chat history could not load: " + st.session_state.chat_history_error)
-            if st.button("↻ Refresh chat history", key="refresh_chat_history", use_container_width=True):
-                try:
-                    saved_chats = load_chat_history()
-                    st.session_state.chats.update(saved_chats)
-                    st.session_state.chats = dict(sorted(st.session_state.chats.items(), key=_chat_sort_key))
-                    st.session_state.chat_history_error = ""
-                    st.rerun()
-                except Exception as exc:
-                    st.session_state.chat_history_error = str(exc)
-                    st.rerun()
-            # Clear-all is deliberately separated into request and confirmation steps.
-            if st.button("🗑️ Clear all chats", key="clear_all_chats_request", use_container_width=True):
-                st.session_state["confirm_clear_all_chats"] = True
-            if st.session_state.get("confirm_clear_all_chats"):
-                st.warning("This permanently deletes all your saved conversations and clears this session's chat list. Your account, memories, documents, and settings will remain.")
-                confirm_col, cancel_col = st.columns(2)
-                with confirm_col:
-                    if st.button("Yes, clear all", key="confirm_clear_all_chats", type="primary", use_container_width=True):
-                        try:
-                            # Fetch the server's current list first so chats not currently
-                            # loaded in this browser session are included as well.
-                            remote_chats = load_chat_history() if st.session_state.get("auth_user") else {}
-                            remote_ids = list(remote_chats.keys())
-                            failed_deletions = []
-                            for remote_id in remote_ids:
-                                try:
-                                    delete_chat_history(remote_id)
-                                except Exception as delete_exc:
-                                    failed_deletions.append((remote_id, str(delete_exc)))
-                            if failed_deletions:
-                                # Keep any conversations whose remote deletion failed.
-                                remaining = {cid: data for cid, data in st.session_state.chats.items() if cid not in remote_ids or any(cid == failed_id for failed_id, _ in failed_deletions)}
-                                st.session_state.chats = remaining
-                                st.session_state["confirm_clear_all_chats"] = False
-                                st.error(f"Deleted {len(remote_ids) - len(failed_deletions)} conversation(s), but {len(failed_deletions)} could not be deleted. Refresh chat history and try again.")
-                            else:
-                                st.session_state.chats = {}
-                                make_chat()
-                                st.session_state["chat_history_error"] = ""
-                                st.session_state["confirm_clear_all_chats"] = False
-                                st.success("All chats cleared. Your memories and account are unchanged.")
-                        except Exception as clear_exc:
-                            st.session_state["confirm_clear_all_chats"] = False
-                            st.error("Could not clear chats: " + str(clear_exc))
-                with cancel_col:
-                    if st.button("Cancel", key="cancel_clear_all_chats", use_container_width=True):
-                        st.session_state["confirm_clear_all_chats"] = False
-                        st.rerun()
-            for saved_id, saved_data in sorted(st.session_state.chats.items(), key=_chat_sort_key, reverse=True):
-                if not saved_data.get("messages"):
-                    continue
-                with st.container(border=True):
-                    st.write(saved_data.get("title", "New conversation"))
-                    st.caption(saved_data.get("summary") or _chat_summary_from_messages(saved_data.get("messages", [])))
-                    a, b = st.columns(2)
-                    with a:
-                        if st.button("Open", key="open_saved_chat_" + saved_id, use_container_width=True):
-                            st.session_state.current_chat = saved_id
-                            st.rerun()
-                    with b:
-                        if st.button("Delete", key="delete_saved_chat_" + saved_id, use_container_width=True):
-                            try:
-                                delete_chat_history(saved_id)
-                                st.session_state.chats.pop(saved_id, None)
-                                if st.session_state.current_chat == saved_id:
-                                    make_chat()
-                                st.rerun()
-                            except Exception as exc:
-                                st.error("Could not delete saved chat: " + str(exc))
         if st.button("Sign out", use_container_width=True, key="jane_sign_out"):
             st.session_state.auth_user = None
             st.session_state.auth_token = None
@@ -2604,14 +2536,87 @@ with st.sidebar:
             st.session_state.jane_entry_screen = "welcome"
             st.session_state.auth_mode = "signin"
             st.rerun()
-    if st.button("＋  New chat", use_container_width=True):
-        make_chat(); st.rerun()
-    st.divider(); st.markdown("### 💬 Chat history")
+    st.divider()
+    if st.button("＋  New conversation", use_container_width=True, key="sidebar_new_conversation"):
+        make_chat()
+        st.rerun()
+
+    st.markdown("### 💬 Chat history")
+    if st.session_state.get("chat_history_error"):
+        st.caption("Chat sync issue: " + str(st.session_state.chat_history_error))
+    history_tools = st.columns([1, 1])
+    with history_tools[0]:
+        if st.button("↻ Refresh", key="sidebar_refresh_chat_history", use_container_width=True):
+            try:
+                if st.session_state.get("auth_user"):
+                    saved_chats = load_chat_history()
+                    st.session_state.chats.update(saved_chats)
+                    st.session_state.chats = dict(sorted(st.session_state.chats.items(), key=_chat_sort_key))
+                st.session_state.chat_history_error = ""
+            except Exception as exc:
+                st.session_state.chat_history_error = str(exc)
+            st.rerun()
+    with history_tools[1]:
+        if st.button("Clear all", key="sidebar_clear_all_request", use_container_width=True):
+            st.session_state["confirm_clear_all_chats"] = True
+
+    if st.session_state.get("confirm_clear_all_chats"):
+        st.warning("Delete all conversations? Your Memory Center, account, documents, and settings will stay untouched.")
+        clear_cols = st.columns(2)
+        with clear_cols[0]:
+            if st.button("Delete all", key="sidebar_confirm_clear_all", type="primary", use_container_width=True):
+                try:
+                    remote_chats = load_chat_history() if st.session_state.get("auth_user") else {}
+                    remote_ids = list(remote_chats.keys())
+                    failed = []
+                    for remote_id in remote_ids:
+                        try:
+                            delete_chat_history(remote_id)
+                        except Exception as exc:
+                            failed.append((remote_id, str(exc)))
+                    if failed:
+                        st.session_state.chat_history_error = f"Could not delete {len(failed)} saved chat(s). Please refresh and retry."
+                        st.session_state["confirm_clear_all_chats"] = False
+                    else:
+                        st.session_state.chats = {}
+                        make_chat()
+                        if st.session_state.get("auth_user"):
+                            save_chat_history(st.session_state.current_chat, st.session_state.chats[st.session_state.current_chat])
+                        st.session_state["confirm_clear_all_chats"] = False
+                        st.session_state.chat_history_error = ""
+                except Exception as exc:
+                    st.session_state.chat_history_error = str(exc)
+                    st.session_state["confirm_clear_all_chats"] = False
+                st.rerun()
+        with clear_cols[1]:
+            if st.button("Cancel", key="sidebar_cancel_clear_all", use_container_width=True):
+                st.session_state["confirm_clear_all_chats"] = False
+                st.rerun()
+
+    # The sidebar is the chat-history view: each conversation is directly
+    # accessible, with a compact accent-coloured delete control beside it.
     for chat_id, chat_data in sorted(st.session_state.chats.items(), key=_chat_sort_key, reverse=True):
-        label = chat_data.get("title", "New conversation")[:30] or "New conversation"
-        if chat_id == st.session_state.current_chat: label = "● " + label
-        if st.button(label, key=f"select_chat_{chat_id}", use_container_width=True, help=chat_data.get("summary") or _chat_summary_from_messages(chat_data.get("messages", []))):
-            st.session_state.current_chat = chat_id; st.rerun()
+        title = str(chat_data.get("title", "New conversation"))[:34] or "New conversation"
+        summary = chat_data.get("summary") or _chat_summary_from_messages(chat_data.get("messages", []))
+        chat_cols = st.columns([8, 1], gap="small")
+        with chat_cols[0]:
+            label = ("● " if chat_id == st.session_state.current_chat else "") + title
+            if st.button(label, key=f"select_chat_{chat_id}", use_container_width=True, help=summary):
+                st.session_state.current_chat = chat_id
+                st.rerun()
+        with chat_cols[1]:
+            if st.button("×", key=f"delete_chat_{chat_id}", help="Delete this conversation"):
+                try:
+                    if st.session_state.get("auth_user"):
+                        delete_chat_history(chat_id)
+                    st.session_state.chats.pop(chat_id, None)
+                    if not st.session_state.chats or st.session_state.current_chat == chat_id:
+                        make_chat()
+                        if st.session_state.get("auth_user"):
+                            save_chat_history(st.session_state.current_chat, st.session_state.chats[st.session_state.current_chat])
+                except Exception as exc:
+                    st.session_state.chat_history_error = str(exc)
+                st.rerun()
     st.divider(); st.markdown("### 📎 Documents & attachments")
     uploaded = st.file_uploader("Attach files", type=None, accept_multiple_files=True, help="Upload any file type or extension. Files remain in the current app session and are not permanently stored.")
     if uploaded:
