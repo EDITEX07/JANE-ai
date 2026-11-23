@@ -15,11 +15,39 @@ import re
 
 import pandas as pd
 from PIL import Image
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except Exception:
+    pass
 import streamlit as st
 import streamlit.components.v1 as components
 from google import genai
 from google.genai import types
 from openai import OpenAI
+
+
+# Broad upload support. These registries are required by the attachment reader.
+IMAGE_MIME_BY_EXT = {
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".webp": "image/webp", ".gif": "image/gif", ".bmp": "image/bmp",
+    ".tif": "image/tiff", ".tiff": "image/tiff", ".heic": "image/heic",
+    ".heif": "image/heif", ".avif": "image/avif", ".ico": "image/x-icon",
+    ".svg": "image/svg+xml",
+}
+TEXT_LIKE_EXTENSIONS = {
+    ".txt", ".md", ".markdown", ".rst", ".log", ".csv", ".tsv",
+    ".json", ".jsonl", ".ndjson", ".xml", ".html", ".htm", ".xhtml",
+    ".css", ".scss", ".sass", ".less", ".js", ".jsx", ".mjs", ".cjs",
+    ".ts", ".tsx", ".py", ".ipynb", ".java", ".kt", ".kts", ".c", ".h",
+    ".cc", ".cpp", ".hpp", ".cs", ".go", ".rs", ".rb", ".php", ".swift",
+    ".dart", ".r", ".R", ".sql", ".sh", ".bash", ".zsh", ".ps1", ".bat",
+    ".cmd", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf", ".env",
+    ".properties", ".gitignore", ".dockerignore", ".dockerfile", ".makefile",
+    ".tex", ".bib", ".srt", ".vtt", ".ass", ".ssa", ".ics", ".vcf",
+    ".diff", ".patch", ".graphql", ".gql", ".proto", ".vue", ".svelte",
+    ".astro", ".tf", ".hcl", ".gradle", ".xml", ".svg", ".wasm",
+}
 
 
 # -------------------- FREE IMAGE GENERATION (AI HORDE) --------------------
@@ -322,124 +350,211 @@ def _uploaded_extension(filename, file_info):
 def _is_uploaded_image(filename, file_info):
     return _uploaded_extension(filename, file_info) in IMAGE_MIME_BY_EXT or str((file_info or {}).get("type") or "").lower().startswith("image/")
 
+def _gemini_describe_uploaded_binary(filename, data, mime_type, instruction=None, model=None):
+    """Ask Gemini to inspect supported binary media directly, without pretending unsupported formats were parsed."""
+    if not mime_type or len(data) > 18 * 1024 * 1024:
+        return None
+    try:
+        client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+        part = types.Part.from_bytes(data=data, mime_type=mime_type)
+        response = client.models.generate_content(
+            model=model or st.secrets.get("GEMINI_VISION_MODEL", st.secrets.get("GEMINI_MODEL", "gemini-2.5-flash")),
+            contents=[instruction or (
+                f"Read and analyze the attached file named {filename}. Extract its useful content faithfully. "
+                "Describe tables, charts, diagrams, and structure where relevant. Do not invent missing details."
+            ), part],
+        )
+        return (response.text or f"The file {filename} was attached, but the model returned no readable content.")[:30000]
+    except Exception as exc:
+        return f"J.A.N.E. received {filename}, but could not inspect its contents ({type(exc).__name__}). The file is attached; try exporting it as PDF, DOCX, XLSX, CSV, TXT, or PNG/JPG."
+
+
 def extract_uploaded_file_text(filename, file_info):
-    """Extract readable text or multimodal summary from an uploaded file."""
+    """Extract text/tables from common formats and use Gemini for supported visual/media files."""
     data = file_info.get("data", b"")
     extension = _uploaded_extension(filename, file_info)
     if not data:
-        return ""
+        return "The uploaded file is empty."
+    lower_name = str(filename or "").lower()
     try:
+        # Images: inspect the actual bytes and pass the original image to the vision model.
         if _is_uploaded_image(filename, file_info):
             mime_type = IMAGE_MIME_BY_EXT.get(extension) or str(file_info.get("type") or "").split(";", 1)[0]
-            if not mime_type.startswith("image/"):
-                mime_type = "image/jpeg"
-            if data.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
-                mime_type = "image/png"
-            elif data.startswith(b"\\xff\\xd8\\xff"):
-                mime_type = "image/jpeg"
-            elif data[:4] == b"RIFF" and data[8:12] == b"WEBP":
-                mime_type = "image/webp"
-            elif data.startswith((b"GIF87a", b"GIF89a")):
-                mime_type = "image/gif"
-            elif data.startswith((b"II*\\x00", b"MM\\x00*")):
-                mime_type = "image/tiff"
-            client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-            part = types.Part.from_bytes(data=data, mime_type=mime_type)
-            response = client.models.generate_content(
-                model=st.secrets.get("GEMINI_VISION_MODEL", st.secrets.get("GEMINI_MODEL", "gemini-2.5-flash")),
-                contents=[
-                    "Inspect this uploaded image. Describe visible objects, people, scene, layout, charts and diagrams. Extract visible text faithfully. Do not guess unclear details; mark them [unclear].",
-                    part,
-                ],
+            if data.startswith(b"\x89PNG\r\n\x1a\n"): mime_type = "image/png"
+            elif data.startswith(b"\xff\xd8\xff"): mime_type = "image/jpeg"
+            elif data[:4] == b"RIFF" and data[8:12] == b"WEBP": mime_type = "image/webp"
+            elif data.startswith((b"GIF87a", b"GIF89a")): mime_type = "image/gif"
+            elif data.startswith((b"II*\x00", b"MM\x00*")): mime_type = "image/tiff"
+            result = _gemini_describe_uploaded_binary(
+                filename, data, mime_type,
+                "Inspect this uploaded image carefully. Describe visible objects, people, scene, layout, charts and diagrams. "
+                "Extract visible text faithfully, preserving language and numbers. Do not guess unclear details; mark them [unclear]."
             )
-            return (response.text or "The image was attached, but the model returned no description.")[:20000]
+            return result or f"Image file attached: {filename}. Image analysis could not be started for this format."
 
-        if extension in TEXT_LIKE_EXTENSIONS or filename.lower() in ("dockerfile", "makefile", "readme", "license"):
-            return data.decode("utf-8-sig", errors="replace")[:30000]
+        # Text, source code, configuration, subtitles, structured text and notebook files.
+        if extension in TEXT_LIKE_EXTENSIONS or lower_name in ("dockerfile", "makefile", "readme", "license"):
+            decoded = data.decode("utf-8-sig", errors="replace")
+            if extension == ".ipynb" or lower_name.endswith(".ipynb"):
+                try:
+                    notebook = json.loads(decoded)
+                    cells = []
+                    for i, cell in enumerate(notebook.get("cells", []), 1):
+                        source = cell.get("source", "")
+                        if isinstance(source, list): source = "".join(source)
+                        cells.append(f"[Cell {i} - {cell.get('cell_type', 'unknown')}]\n{source}")
+                    decoded = "\n\n".join(cells)
+                except Exception:
+                    pass
+            return decoded[:30000] or "The text file is empty."
+
         if extension in (".csv", ".tsv"):
-            sep = "\t" if extension == ".tsv" else ","
-            frame = pd.read_csv(io.BytesIO(data), sep=sep, nrows=300)
-            return frame.to_string(index=False, max_rows=300, max_cols=40)[:30000]
-        if extension in (".xlsx", ".xls", ".ods"):
-            frame = pd.read_excel(io.BytesIO(data), nrows=300)
-            return frame.to_string(index=False, max_rows=300, max_cols=40)[:30000]
+            frame = pd.read_csv(io.BytesIO(data), sep="\t" if extension == ".tsv" else ",", nrows=500)
+            return f"Rows shown: {len(frame)}\nColumns: {', '.join(map(str, frame.columns))}\n\n{frame.to_string(index=False, max_rows=500, max_cols=60)}"[:30000]
+
+        if extension in (".xlsx", ".xls", ".xlsm", ".xlsb", ".ods"):
+            sheets = pd.read_excel(io.BytesIO(data), sheet_name=None, nrows=300)
+            parts = []
+            for sheet_name, frame in list(sheets.items())[:20]:
+                parts.append(f"[Sheet: {sheet_name}]\n{frame.to_string(index=False, max_rows=300, max_cols=60)}")
+            return "\n\n".join(parts)[:30000] or "No spreadsheet rows were found."
+
         if extension == ".pdf":
+            extracted = ""
             try:
                 from pypdf import PdfReader
+                reader = PdfReader(io.BytesIO(data))
+                pages = [(page.extract_text() or "") for page in reader.pages[:60]]
+                extracted = "\n\n".join(f"[Page {i + 1}]\n{page}" for i, page in enumerate(pages)).strip()
             except ImportError:
-                return "PDF text extraction needs the pypdf package. Add pypdf to requirements.txt and redeploy."
-            reader = PdfReader(io.BytesIO(data))
-            pages = [(page.extract_text() or "") for page in reader.pages[:40]]
-            extracted = "\n\n".join(f"[Page {i + 1}]\n{page}" for i, page in enumerate(pages))
-            return extracted[:30000] or "No selectable text was found in this PDF. It may be a scanned document; scanned-PDF OCR is not enabled yet."
+                extracted = ""
+            except Exception as exc:
+                extracted = f"PDF text extraction error: {type(exc).__name__}"
+            if len(extracted) >= 40:
+                return extracted[:30000]
+            # This also supports scanned/image-only PDFs when Gemini accepts application/pdf.
+            vision_result = _gemini_describe_uploaded_binary(
+                filename, data, "application/pdf",
+                "Read this PDF, including scanned pages when possible. Extract its text page by page, preserve tables and headings, "
+                "and identify diagrams/charts. Mark unreadable portions as [unclear]."
+            )
+            return vision_result or (extracted or "No selectable PDF text was found. The PDF is still attached.")
+
         if extension == ".docx":
-            try:
-                from docx import Document
-            except ImportError:
-                return "Word document reading needs the python-docx package. Add python-docx to requirements.txt and redeploy."
+            from docx import Document
             document = Document(io.BytesIO(data))
-            paragraphs = [para.text for para in document.paragraphs if para.text.strip()]
-            for table in document.tables[:20]:
-                for row in table.rows[:100]:
-                    paragraphs.append(" | ".join(cell.text.replace("\n", " ") for cell in row.cells))
-            return "\n".join(paragraphs)[:30000]
+            parts = [p.text for p in document.paragraphs if p.text.strip()]
+            for table_no, table in enumerate(document.tables[:30], 1):
+                parts.append(f"[Table {table_no}]")
+                for row in table.rows[:200]:
+                    parts.append(" | ".join(cell.text.replace("\n", " ") for cell in row.cells))
+            return "\n".join(parts)[:30000] or "No readable text found in the Word document."
+
         if extension == ".pptx":
+            from pptx import Presentation
+            presentation = Presentation(io.BytesIO(data))
+            slides = []
+            for idx, slide in enumerate(presentation.slides[:80], 1):
+                parts = []
+                for shape in slide.shapes:
+                    if getattr(shape, "has_text_frame", False) and shape.text.strip(): parts.append(shape.text.strip())
+                    if getattr(shape, "has_table", False):
+                        for row in shape.table.rows:
+                            parts.append(" | ".join(cell.text for cell in row.cells))
+                if parts: slides.append(f"[Slide {idx}]\n" + "\n".join(parts))
+            return "\n\n".join(slides)[:30000] or "No selectable text found in the presentation."
+
+        if extension in (".rtf",):
             try:
-                from pptx import Presentation
+                from striprtf.striprtf import rtf_to_text
+                return rtf_to_text(data.decode("utf-8", errors="replace"))[:30000]
             except ImportError:
-                return "PowerPoint reading needs the python-pptx package. Add python-pptx to requirements.txt and redeploy."
-            prs = Presentation(io.BytesIO(data))
-            slides_text = []
-            for idx, slide in enumerate(prs.slides[:50], start=1):
-                parts = [shape.text.strip() for shape in slide.shapes if hasattr(shape, "text") and shape.text.strip()]
-                if parts:
-                    slides_text.append(f"[Slide {idx}]\n" + "\n".join(parts))
-            return "\n\n".join(slides_text)[:30000] or "No selectable text found in presentation."
+                return "RTF file attached. Install striprtf to extract its formatted text."
+
+        if extension in (".odt", ".ods", ".odp", ".epub"):
+            import zipfile
+            from xml.etree import ElementTree as ET
+            if zipfile.is_zipfile(io.BytesIO(data)):
+                with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                    names = archive.namelist()
+                    candidates = [n for n in names if n.endswith(("content.xml", ".xhtml", ".html", ".htm"))]
+                    texts = []
+                    for member in candidates[:40]:
+                        try:
+                            root = ET.fromstring(archive.read(member))
+                            text = " ".join(t.strip() for t in root.itertext() if t.strip())
+                            if text: texts.append(f"[{member}]\n{text}")
+                        except Exception:
+                            continue
+                    if texts: return "\n\n".join(texts)[:30000]
+
         if extension == ".zip":
             import zipfile
             if zipfile.is_zipfile(io.BytesIO(data)):
-                with zipfile.ZipFile(io.BytesIO(data)) as zf:
-                    names = zf.namelist()[:100]
-                    snippets = [f"ZIP archive contents ({len(zf.namelist())} files): " + ", ".join(names)]
-                    for member in names[:10]:
-                        if member.endswith("/"):
-                            continue
-                        if Path(member).suffix.lower() in TEXT_LIKE_EXTENSIONS or Path(member).suffix.lower() == ".csv":
+                with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                    names = [n for n in archive.namelist() if not n.endswith("/")]
+                    parts = [f"Archive contains {len(names)} files:\n" + "\n".join(names[:150])]
+                    for member in names[:30]:
+                        if Path(member).suffix.lower() in TEXT_LIKE_EXTENSIONS or Path(member).suffix.lower() in (".csv", ".tsv"):
                             try:
-                                content = zf.read(member).decode("utf-8-sig", errors="replace")[:3000]
-                                snippets.append(f"--- {member} ---\n{content}")
+                                parts.append(f"--- {member} ---\n" + archive.read(member).decode("utf-8-sig", errors="replace")[:2500])
                             except Exception:
                                 pass
-                    return "\n\n".join(snippets)[:30000]
-        if extension in (".mp3", ".wav", ".ogg", ".m4a", ".flac", ".aac", ".mp4", ".webm", ".mov"):
-            media_mimes = {
-                ".mp3": "audio/mp3", ".wav": "audio/wav", ".ogg": "audio/ogg",
-                ".m4a": "audio/mp4", ".flac": "audio/flac", ".aac": "audio/aac",
-                ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
-            }
-            if len(data) <= 18 * 1024 * 1024:
-                client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-                part = types.Part.from_bytes(data=data, mime_type=media_mimes[extension])
-                response = client.models.generate_content(
-                    model="gemini-3.5-flash-lite",
-                    contents=[
-                        "Transcribe or summarize the spoken words, sounds, and visual content of this uploaded media file accurately.",
-                        part,
-                    ],
-                )
-                return (response.text or f"Uploaded media file: {filename} ({len(data)} bytes).")[:20000]
-            return f"Uploaded media file: {filename} ({len(data)} bytes). File exceeds inline 18 MB preview limit."
+                    return "\n\n".join(parts)[:30000]
 
-        # Universal fallback: inspect whether the unknown file is valid UTF-8/UTF-16 text or binary
-        sample = data[:4096]
-        if b"\x00" not in sample:
+        if extension in (".mp3", ".wav", ".ogg", ".m4a", ".flac", ".aac", ".aiff", ".mp4", ".webm", ".mov", ".mpeg", ".mpg"):
+            media_mimes = {
+                ".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg",
+                ".m4a": "audio/mp4", ".flac": "audio/flac", ".aac": "audio/aac",
+                ".aiff": "audio/aiff", ".mp4": "video/mp4", ".webm": "video/webm",
+                ".mov": "video/quicktime", ".mpeg": "video/mpeg", ".mpg": "video/mpeg",
+            }
+            result = _gemini_describe_uploaded_binary(
+                filename, data, media_mimes[extension],
+                "Transcribe and summarize this media accurately. For audio, capture spoken words and relevant sounds. "
+                "For video, describe the sequence and important on-screen text. Do not invent inaudible or unseen content.",
+                model=st.secrets.get("GEMINI_MEDIA_MODEL", st.secrets.get("GEMINI_MODEL", "gemini-2.5-flash")),
+            )
+            return result or f"Media file attached: {filename}. It may exceed the 18 MB inline inspection limit."
+
+        if extension in (".parquet", ".feather"):
+            frame = pd.read_parquet(io.BytesIO(data)) if extension == ".parquet" else pd.read_feather(io.BytesIO(data))
+            return frame.head(300).to_string(index=False, max_cols=60)[:30000]
+
+        if extension in (".db", ".sqlite", ".sqlite3"):
+            import sqlite3
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=extension) as tmp:
+                tmp.write(data); tmp.flush()
+                connection = sqlite3.connect(tmp.name)
+                try:
+                    tables = connection.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
+                    parts = []
+                    for (table_name,) in tables[:20]:
+                        safe_name = table_name.replace('"', '""')
+                        rows = connection.execute(f'SELECT * FROM "{safe_name}" LIMIT 100').fetchall()
+                        columns = [d[0] for d in connection.execute(f'PRAGMA table_info("{safe_name}")').fetchall()]
+                        parts.append(f"[Table {table_name}]\nColumns: {columns}\nRows: {rows}")
+                    return "\n\n".join(parts)[:30000] or "No tables found in this database."
+                finally:
+                    connection.close()
+
+        # Generic text fallback for extensionless files and less common text formats.
+        try:
             decoded = data.decode("utf-8-sig", errors="strict")
-            return decoded[:30000]
-        return f"Uploaded binary file '{filename}' (extension: {extension or 'none'}, size: {len(data):,} bytes). Attached in session."
-    except UnicodeDecodeError:
-        return f"Uploaded binary file '{filename}' (extension: {extension or 'none'}, size: {len(data):,} bytes). Attached in session."
+            if "\x00" not in decoded[:4096]: return decoded[:30000]
+        except UnicodeDecodeError:
+            pass
+        guessed_mime = str(file_info.get("type") or "").split(";", 1)[0] or __import__("mimetypes").guess_type(filename)[0]
+        if guessed_mime and (guessed_mime.startswith(("image/", "audio/", "video/")) or guessed_mime == "application/pdf"):
+            result = _gemini_describe_uploaded_binary(filename, data, guessed_mime)
+            if result: return result
+        return f"File received: {filename}\nFormat: {extension or guessed_mime or 'unknown'}\nSize: {len(data):,} bytes.\nThis format is attached, but its contents could not be safely decoded by the available readers."
+    except ImportError as exc:
+        package = str(exc.name or "required package")
+        return f"File received: {filename}, but its reader dependency '{package}' is not installed. Add it to requirements.txt and redeploy J.A.N.E."
     except Exception as exc:
-        return f"J.A.N.E. could not read this file ({type(exc).__name__}). Please check that it is not damaged or password-protected."
+        return f"J.A.N.E. could not fully read {filename} ({type(exc).__name__}). The file remains attached; check whether it is damaged, encrypted, or password-protected."
 
 
 def build_attached_file_context():
