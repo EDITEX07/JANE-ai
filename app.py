@@ -90,6 +90,49 @@ def _jane_gemini_model(secret_name="GEMINI_MODEL"):
     return configured
 
 
+def _jane_gemini_api_keys():
+    """Return configured Gemini keys in priority order without exposing their values."""
+    keys = []
+    for secret_name in ("GEMINI_API_KEY", "GEMINI_API_KEY_2"):
+        value = _jane_secret(secret_name)
+        if value and value not in keys:
+            keys.append(value)
+    return keys
+
+
+def _jane_gemini_clients():
+    """Create Gemini clients for the primary key and optional secondary fallback key."""
+    if genai is None:
+        raise RuntimeError("The google-genai package is not available.")
+    keys = _jane_gemini_api_keys()
+    if not keys:
+        raise RuntimeError("Add GEMINI_API_KEY to Streamlit Secrets.")
+    clients = []
+    for index, key in enumerate(keys):
+        try:
+            clients.append((f"Gemini {'primary' if index == 0 else 'fallback ' + str(index)}", genai.Client(api_key=key)))
+        except Exception:
+            if index == 0:
+                raise
+    return clients
+
+
+def _jane_should_failover_gemini(exc):
+    """Fail over to the next Gemini key for transient, quota, auth or model-access failures."""
+    message = str(exc).lower()
+    status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    return (
+        status in (401, 403, 404, 408, 429) or
+        (isinstance(status, int) and status >= 500) or
+        any(term in message for term in (
+            "resource_exhausted", "quota exceeded", "rate limit", "too many requests",
+            "429", "unauthorized", "permission denied", "api key", "not_found",
+            "model not found", "not supported for generatecontent", "internal server error",
+            "service unavailable", "deadline exceeded", "timed out",
+        ))
+    )
+
+
 def _jane_gemini_model_candidates(client, secret_name="GEMINI_MODEL"):
     """Prefer models listed for this API key, with current stable fallbacks."""
     preferred = [
@@ -538,44 +581,44 @@ def _prepare_image_for_vision(filename, data, mime_type):
 
 
 def _gemini_describe_uploaded_binary(filename, data, mime_type, instruction=None, model=None):
-    """Ask Gemini to inspect supported binary media directly, without pretending unsupported formats were parsed."""
+    """Analyze supported binary media using the primary Gemini key, then the optional second key."""
     if not mime_type:
         return "J.A.N.E. received the file, but its MIME type could not be identified."
     if len(data) > 18 * 1024 * 1024:
         return (f"J.A.N.E. received {filename}, but this file is larger than the "
                 "18 MB inline-analysis limit. Compress it or split it into smaller files.")
     try:
-        api_key = _jane_secret("GEMINI_API_KEY")
-        if not api_key:
-            return (f"J.A.N.E. received {filename}, but visual reading is unavailable: "
-                    "GEMINI_API_KEY is missing from Streamlit Secrets. Add it and redeploy.")
-        client = genai.Client(api_key=api_key)
+        clients = _jane_gemini_clients()
         part = types.Part.from_bytes(data=data, mime_type=mime_type)
         request_contents = [instruction or (
             f"Read and analyze the attached file named {filename}. Extract its useful content faithfully. "
             "Describe tables, charts, diagrams, and structure where relevant. Do not invent missing details."
         ), part]
-        candidates = [model] if model else _jane_gemini_model_candidates(client, "GEMINI_VISION_MODEL")
-        last_error = None
-        for candidate in candidates:
-            try:
-                response = client.models.generate_content(
-                    model=str(candidate).removeprefix("models/"),
-                    contents=request_contents,
-                )
-                return (response.text or f"The file {filename} was attached, but the model returned no readable content.")[:30000]
-            except Exception as exc:
-                last_error = exc
-                if not _jane_is_model_not_found_error(exc):
-                    raise
-        if last_error:
-            raise last_error
-        raise RuntimeError("No Gemini vision model is available to this API key.")
+        errors = []
+        for key_label, client in clients:
+            candidates = [model] if model else _jane_gemini_model_candidates(client, "GEMINI_VISION_MODEL")
+            for candidate in candidates:
+                try:
+                    response = client.models.generate_content(
+                        model=str(candidate).removeprefix("models/"),
+                        contents=request_contents,
+                    )
+                    return (response.text or f"The file {filename} was attached, but the model returned no readable content.")[:30000]
+                except Exception as exc:
+                    errors.append((key_label, exc))
+                    if not _jane_should_failover_gemini(exc) and not _jane_is_model_not_found_error(exc):
+                        raise
+                    # Try the next available model on this key before the next key.
+                    continue
+        if errors:
+            label, last_error = errors[-1]
+            raise RuntimeError(f"{label} could not analyze the file: {_jane_safe_provider_error(last_error, 380)}")
+        raise RuntimeError("No Gemini model is available for file analysis.")
     except Exception as exc:
-        detail = _jane_safe_provider_error(exc, 420)
+        detail = _jane_safe_provider_error(exc, 480)
         return (f"J.A.N.E. received {filename}, but the visual reader failed "
-                f"({type(exc).__name__}: {detail}). Check model access, API key permissions, "
-                "and the file format. The image bytes were received but not successfully analyzed.")
+                f"({type(exc).__name__}: {detail}). Check both Gemini keys, model access, "
+                "and the file format. The file was not successfully analyzed.")
 
 
 
@@ -3553,10 +3596,8 @@ if prompt:
                     )
                 answer = generated_file["summary"]
             else:
-                gemini_key = _jane_secret("GEMINI_API_KEY")
-                if not gemini_key:
-                    raise RuntimeError("GEMINI_API_KEY is missing from Streamlit Secrets.")
-                client = genai.Client(api_key=gemini_key)
+                gemini_clients = _jane_gemini_clients()
+                client = gemini_clients[0][1]
                 mode_instructions = {
                     "General": "Use natural, direct conversation. Keep simple answers short, avoid unnecessary headings and analysis, and expand only when asked or genuinely needed.",
                     "Adaptive": "Silently infer what the user needs and respond in the most natural, useful way. Adapt detail and format to the situation without announcing or labeling the task type, response style, or your internal approach. Use conversational prose by default; use steps, lists, or structure only when they genuinely help. Ask a clarifying question only when essential.",
@@ -3636,32 +3677,39 @@ if prompt:
                 final_stream_chunk = {"value": None}
 
                 def _jane_text_stream():
-                    last_model_error = None
-                    candidates = _jane_gemini_model_candidates(client, "GEMINI_MODEL")
-                    for candidate in candidates:
-                        try:
-                            for stream_chunk in client.models.generate_content_stream(
-                                model=str(candidate).removeprefix("models/"),
-                                contents="\\n\\n".join(conversation),
-                                config=request_config,
-                            ):
-                                final_stream_chunk["value"] = stream_chunk
-                                chunk_grounding = getattr(stream_chunk, "grounding_metadata", None)
-                                if chunk_grounding is not None:
-                                    final_stream_chunk["grounding"] = chunk_grounding
-                                piece = getattr(stream_chunk, "text", None)
-                                if piece:
-                                    stream_chunks.append(piece)
-                                    yield piece
-                            st.session_state["jane_last_working_gemini_model"] = str(candidate)
-                            return
-                        except Exception as exc:
-                            if stream_chunks or not _jane_is_model_not_found_error(exc):
-                                raise
-                            last_model_error = exc
-                    if last_model_error:
-                        raise last_model_error
-                    raise RuntimeError("No Gemini model supporting text generation was available to this API key.")
+                    last_error = None
+                    for key_label, active_client in gemini_clients:
+                        candidates = _jane_gemini_model_candidates(active_client, "GEMINI_MODEL")
+                        for candidate in candidates:
+                            try:
+                                for stream_chunk in active_client.models.generate_content_stream(
+                                    model=str(candidate).removeprefix("models/"),
+                                    contents="\\n\\n".join(conversation),
+                                    config=request_config,
+                                ):
+                                    final_stream_chunk["value"] = stream_chunk
+                                    chunk_grounding = getattr(stream_chunk, "grounding_metadata", None)
+                                    if chunk_grounding is not None:
+                                        final_stream_chunk["grounding"] = chunk_grounding
+                                    piece = getattr(stream_chunk, "text", None)
+                                    if piece:
+                                        stream_chunks.append(piece)
+                                        yield piece
+                                st.session_state["jane_last_working_gemini_model"] = str(candidate)
+                                st.session_state["jane_last_working_gemini_key"] = key_label
+                                return
+                            except Exception as exc:
+                                # Never restart another provider after partial text was already shown.
+                                if stream_chunks:
+                                    raise
+                                last_error = exc
+                                if not _jane_should_failover_gemini(exc) and not _jane_is_model_not_found_error(exc):
+                                    raise
+                                # Model-not-found: continue with the next model on this key.
+                                continue
+                    if last_error:
+                        raise last_error
+                    raise RuntimeError("No configured Gemini key has an available text-generation model.")
 
 
                 with st.chat_message("assistant", avatar="assistant"):
@@ -3827,7 +3875,7 @@ if prompt:
                             render_speak_controls(answer, f"openai-streamed-{len(chat['messages'])}")
                         streamed_answer = True
                 except Exception as fallback_error:
-                    answer = _jane_provider_failure_message(error, fallback_error)
+                    answer = _jane_provider_failure_message(error, fallback_error) + "\\n\\nGemini fallback is configured through the optional GEMINI_API_KEY_2 Streamlit secret."
             elif is_key_error:
                 answer = "J.A.N.E. is temporarily unavailable. Please check the app configuration and try again."
             elif is_quota_error:
