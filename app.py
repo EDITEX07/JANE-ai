@@ -134,12 +134,96 @@ def _jane_is_model_not_found_error(exc):
     ))
 
 
+def _jane_retry_wait_text(exc):
+    """Extract a provider-supplied retry delay, if one is present."""
+    message = str(exc)
+    patterns = [
+        r"try again in\s+(?:(\d+)\s*m(?:in)?\s*)?(\d+(?:\.\d+)?)\s*s",
+        r"retry[- ]after[:= ]+([0-9]+(?:\.[0-9]+)?)",
+        r"retry_delay[^0-9]*(\d+(?:\.\d+)?)s",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, message, flags=re.IGNORECASE)
+        if not match:
+            continue
+        if len(match.groups()) == 2:
+            minutes = float(match.group(1) or 0)
+            seconds = float(match.group(2) or 0)
+            total = int(round(minutes * 60 + seconds))
+        else:
+            total = int(round(float(match.group(1))))
+        if total > 0:
+            minutes, seconds = divmod(total, 60)
+            if minutes:
+                return f"about {minutes} minute(s) {seconds} second(s)"
+            return f"about {seconds} second(s)"
+    return None
+
+
+def _jane_provider_failure_message(gemini_error, openai_error):
+    """Explain quota, throughput and authentication failures without conflating them."""
+    gemini_text = str(gemini_error or "").lower()
+    openai_text = str(openai_error or "").lower()
+    parts = []
+
+    if gemini_error:
+        if any(term in gemini_text for term in (
+            "resource_exhausted", "quota exceeded", "rate limit", "429"
+        )):
+            wait = _jane_retry_wait_text(gemini_error)
+            detail = "Gemini's request limit/quota was reached (HTTP 429)."
+            if wait:
+                detail += f" The provider suggests retrying in {wait}."
+            else:
+                detail += " The reset time was not included in the response."
+            parts.append(detail)
+        elif _jane_is_model_not_found_error(gemini_error):
+            parts.append("Gemini could not find or access the selected model.")
+        else:
+            parts.append("Gemini failed: " + _jane_safe_provider_error(gemini_error, 260))
+
+    if openai_error:
+        if any(term in openai_text for term in (
+            "tokens per min", "tokens per minute", "tpm", "requests per min",
+            "requests per minute", "rate_limit_exceeded"
+        )) and "insufficient_quota" not in openai_text:
+            wait = _jane_retry_wait_text(openai_error)
+            detail = "OpenAI's throughput rate limit was reached"
+            if "tokens per min" in openai_text or "tokens per minute" in openai_text or "tpm" in openai_text:
+                detail += " (tokens per minute, TPM)"
+            elif "requests per min" in openai_text or "requests per minute" in openai_text:
+                detail += " (requests per minute, RPM)"
+            detail += ". This is not necessarily a billing or credit problem."
+            if wait:
+                detail += f" Retry in {wait}."
+            else:
+                detail += " Wait for the provider's rate-limit window to reset."
+            parts.append(detail)
+        elif any(term in openai_text for term in (
+            "insufficient_quota", "billing_hard_limit", "exceeded your current quota",
+            "no remaining credits"
+        )):
+            parts.append("OpenAI reports an account usage/credit limit. Check billing and usage.")
+        elif "429" in openai_text or "rate limit" in openai_text:
+            wait = _jane_retry_wait_text(openai_error)
+            detail = "OpenAI temporarily rate-limited the request."
+            if wait:
+                detail += f" Retry in {wait}."
+            parts.append(detail)
+        else:
+            parts.append("OpenAI failed: " + _jane_safe_provider_error(openai_error, 260))
+
+    return "Both AI providers are temporarily unable to answer.\n\n" + "\n\n".join(parts) + (
+        "\n\nJ.A.N.E. cannot bypass provider limits. Please retry after the stated waiting period."
+    )
+
+
 def _jane_safe_provider_error(exc, limit=420):
     """Return useful provider diagnostics without exposing API keys."""
-    message = re.sub(r"AIza[0-9A-Za-z_\\-]{20,}", "[REDACTED_API_KEY]", str(exc))
+    message = re.sub(r"AIza[0-9A-Za-z_-]{20,}", "[REDACTED_API_KEY]", str(exc))
     message = re.sub(r"sk-[A-Za-z0-9_-]{16,}", "[REDACTED_API_KEY]", message)
-    message = re.sub(r"(?i)(api[_ -]?key\\s*[:=]\\s*)[^\\s,;]+", r"\\1[REDACTED]", message)
-    return re.sub(r"\\s+", " ", message).strip()[:limit] or type(exc).__name__
+    message = re.sub(r"(?i)(api[_ -]?key\s*[:=]\s*)[^\s,;]+", r"\1[REDACTED]", message)
+    return re.sub(r"\s+", " ", message).strip()[:limit] or type(exc).__name__
 
 
 # Persistent sign-in uses a browser cookie containing a Fernet-encrypted Firebase refresh token.
@@ -3679,8 +3763,8 @@ if prompt:
                     if not openai_key or OpenAI is None:
                         answer = (
                             "Gemini could not complete this request. "
-                            f"Provider detail: {_jane_safe_provider_error(error, 500)} "
-                            "No usable OpenAI fallback is configured. Check model access and API key settings."
+                            + _jane_provider_failure_message(error, None)
+                            + " No usable OpenAI fallback is configured."
                         )
                     else:
                         mode_instructions = {
@@ -3743,28 +3827,7 @@ if prompt:
                             render_speak_controls(answer, f"openai-streamed-{len(chat['messages'])}")
                         streamed_answer = True
                 except Exception as fallback_error:
-                    fallback_text = str(fallback_error).lower()
-                    gemini_detail = _jane_safe_provider_error(error, 300)
-                    openai_detail = _jane_safe_provider_error(fallback_error, 300)
-                    if "401" in fallback_text or "api key" in fallback_text or "authentication" in fallback_text:
-                        answer = (
-                            "Both AI providers failed. "
-                            f"Gemini: {gemini_detail} OpenAI: {openai_detail} "
-                            "Check the API key configuration. Keys are not displayed."
-                        )
-                    elif any(token in fallback_text for token in ("429", "quota", "rate limit", "insufficient_quota")):
-                        answer = (
-                            "Both AI providers failed. "
-                            f"Gemini: {gemini_detail} OpenAI: {openai_detail} "
-                            "The OpenAI response indicates a usage or credit limit. "
-                            "Provider limits cannot be bypassed by changing app code."
-                        )
-                    else:
-                        answer = (
-                            "Both AI providers failed. "
-                            f"Gemini: {gemini_detail} OpenAI: {openai_detail} "
-                            "Check the provider configuration and Streamlit logs. API keys are hidden."
-                        )
+                    answer = _jane_provider_failure_message(error, fallback_error)
             elif is_key_error:
                 answer = "J.A.N.E. is temporarily unavailable. Please check the app configuration and try again."
             elif is_quota_error:
